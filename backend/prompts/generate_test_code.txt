@@ -1,0 +1,34 @@
+Generate a Playwright test script in Python for the following test case:
+
+IMPORTANT: The target URL for this test is: {url}
+Use this exact URL in page.goto() - DO NOT use example.com or any placeholder URLs.
+
+Test Case Details:
+- Title: {title}
+- Description: {description}
+- Test Type: {test_type}
+- Element Type: {element_type}
+- Test Steps: {test_steps}
+- Expected Behavior: {expected_behavior}
+
+HTML Content:
+{html_chunk}
+
+Requirements:
+- Use Playwright with Python
+- Include proper imports (playwright, pytest)
+- Add comments explaining each step
+- Handle both positive and negative test cases based on test type
+- must add ignore_https_errors=True in the context context = browser.new_context(ignore_https_errors=True) 
+- Include proper assertions
+- Make the code ready to run
+- Use the HTML content to identify selectors
+- Set headless=False by default for browser mode
+- Add option to run in headless mode via environment variable
+- Include proper error handling and timeouts
+- Add wait conditions for elements to be ready
+- IMPORTANT: Use the exact URL "{url}" in page.goto() - DO NOT use placeholder URLs like example.com
+- Replace ALL placeholder URLs with the actual URL: {url}
+- Return only the Python code, no explanation
+
+Generate a complete test function that can be executed with browser mode by default.

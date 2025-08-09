@@ -1,0 +1,33 @@
+Analyze the following HTML {element_type} elements and generate comprehensive test cases.
+Focus ONLY on these specific test types: {test_types}
+
+HTML Content:
+{html_chunk}
+
+Generate 3-5 test cases, distributing them across the requested test types.
+For each test type, create focused tests:
+
+- functional: Test basic functionality and user interactions
+- validation: Test input validation, constraints, and data integrity
+- negative: Test error conditions, edge cases, and failure scenarios
+- positive: Test successful scenarios and expected behaviors
+- error_handling: Test error responses, recovery mechanisms, and graceful degradation
+- performance: Test loading times, responsiveness, and resource usage
+- security: Test authentication, authorization, and data protection
+
+Provide JSON response:
+[
+    {{
+        "title": "Descriptive test case title",
+        "description": "Clear description of what is being tested",
+        "expected_behavior": "Expected outcome when test passes",
+        "test_steps": ["Step 1", "Step 2", "Step 3"],
+        "element_type": "{element_type}",
+        "test_type": "one_of_requested_types",
+        "chunk_number": {chunk_num}
+    }}
+]
+
+Note: The HTML chunk will be added to each test case automatically.
+
+Ensure each test case focuses on the specific test type requested and includes the HTML chunk for reference.
