@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import TestCodeDisplay from './TestCodeDisplay';
 
-const TestCaseItem = ({ testCase, index, generatedCode, isGenerating, onGenerateCode, executionResult, isExecuting, onExecuteTest, onEdit, onRemove, onAddToContext }) => {
+const TestCaseItem = ({ testCase, index, generatedCode, isGenerating, onGenerateCode, executionResult, isExecuting, onExecuteTest, onEdit, onRemove, onAddToContext, onEditCode }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTestCase, setEditedTestCase] = useState(testCase);
 
@@ -71,6 +71,21 @@ const TestCaseItem = ({ testCase, index, generatedCode, isGenerating, onGenerate
       onAddToContext(testCase, generatedCode);
     } else {
       console.error('onAddToContext prop is missing');
+    }
+  };
+
+  const handleEditCode = (index, editedCode) => {
+    // Update the generated code with the edited code
+    if (generatedCode) {
+      const updatedGeneratedCode = {
+        ...generatedCode,
+        test_code: editedCode
+      };
+      // We need to propagate this change up to the parent component
+      // For now, we'll need to add a prop to handle this
+      if (onEditCode) {
+        onEditCode(index, updatedGeneratedCode);
+      }
     }
   };
 
@@ -217,7 +232,7 @@ const TestCaseItem = ({ testCase, index, generatedCode, isGenerating, onGenerate
             testCode={generatedCode.test_code}
             filename={generatedCode.filename}
             status={generatedCode.status}
-            onEdit={() => {}}
+            onEdit={handleEditCode}
             onRemove={() => {}}
             index={index}
           />

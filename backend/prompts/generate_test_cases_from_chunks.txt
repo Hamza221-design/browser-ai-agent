@@ -1,0 +1,26 @@
+Based on the user requirements and HTML content, generate {chunk_test_count} comprehensive test cases.
+
+User Requirements: {requirements}
+Target URL: {url}
+Element Type: {element_type}
+HTML Content:
+{html_content}
+
+**Important**
+- Generate exactly {chunk_test_count} test cases
+- Create well defined test cases that are necessary for the user requirements
+- Focus on the most important scenarios for {element_type} elements
+
+Provide JSON response:
+[
+    {{
+        "title": "Descriptive test case title",
+        "description": "Clear description matching user requirements",
+        "expected_behavior": "Expected outcome when test passes",
+        "test_steps": ["Step 1", "Step 2", "Step 3"],
+        "element_type": "{element_type}",
+        "test_type": "functional|validation|negative|positive",
+        "html_code": "HTML code of the test case you generated based on the code and user requirements",
+        "chunk_number": {chunk_number}
+    }}
+]

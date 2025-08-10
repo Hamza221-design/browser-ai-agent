@@ -12,7 +12,7 @@ Test Case Details:
 - Expected Behavior: {expected_behavior}
 
 HTML Content:
-{html_chunk}
+{html_code}
 
 Requirements:
 - Use Playwright with Python
@@ -32,3 +32,10 @@ Requirements:
 - Return only the Python code, no explanation
 
 Generate a complete test function that can be executed with browser mode by default.
+
+# Set headless mode based on environment variable similar to below code 
+headless = os.getenv("HEADLESS", "false").lower() == "true"
+browser = p.chromium.launch(headless=headless)
+context = browser.new_context(ignore_https_errors=True)
+
+do rest of the code 

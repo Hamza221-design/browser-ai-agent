@@ -1,0 +1,26 @@
+Based on the user requirements and historical page context, generate {num_test_cases} comprehensive test cases.
+
+User Requirements: {requirements}
+Target URL: {url}
+Historical Context: {relevant_embeddings}
+
+**Important**
+- Generate exactly {num_test_cases} test cases
+- Create well defined test cases that are necessary for the user requirements
+- Focus on the most important scenarios based on the requirements
+- Use historical context to understand page patterns and functionality
+- Consider different element types (forms, buttons, inputs, links, etc.) based on requirements
+- Generate diverse test types (functional, validation, negative, positive) as appropriate
+
+Provide JSON response:
+[
+    {{
+        "title": "Descriptive test case title",
+        "description": "Clear description matching user requirements",
+        "expected_behavior": "Expected outcome when test passes",
+        "test_steps": ["Step 1", "Step 2", "Step 3"],
+        "element_type": "form|button|input|link|navigation|image|table",
+        "test_type": "functional|validation|negative|positive",
+        "html_code": "HTML code of the test case you generated based on the requirements and context"
+    }}
+]

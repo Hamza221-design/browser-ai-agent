@@ -243,68 +243,19 @@ const TestCasesList = ({ testCases, onGenerateCode, onGenerateAllCodes, currentU
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const filename = `test_codes_${timestamp}.py`;
     
-    let content = `"""
-Test Code Suite - Generated on ${new Date().toLocaleString()}
-Total Test Cases: ${Object.keys(generatedCodes).length}
-"""
-
-import pytest
-from playwright.sync_api import sync_playwright, expect
-import os
-import time
-
-class TestSuite:
-    def setup_class(self):
-        """Setup for the entire test suite"""
-        self.playwright = sync_playwright().start()
-        # Set headless mode based on environment variable
-        headless_mode = os.getenv('PLAYWRIGHT_HEADLESS', 'false').lower() == 'true'
-        self.browser = self.playwright.chromium.launch(headless=headless_mode)
-        self.context = self.browser.new_context(ignore_https_errors=True)
-        
-    def teardown_class(self):
-        """Cleanup after all tests"""
-        self.context.close()
-        self.browser.close()
-        self.playwright.stop()
-
-`;
+    let content = '';
 
     Object.entries(generatedCodes).forEach(([index, codeData]) => {
       if (codeData && codeData.test_code) {
-        const testCase = testCases[parseInt(index)];
-        content += `    # Test Case ${parseInt(index) + 1}: ${testCase.title}\n`;
-        content += `    # Description: ${testCase.description}\n`;
-        content += `    # Element Type: ${testCase.element_type}\n`;
-        content += `    # Test Type: ${testCase.test_type}\n\n`;
-        
-        // Clean up the generated code and add proper indentation
+        // Remove markdown code block markers only
         let cleanCode = codeData.test_code;
-        
-        // Remove markdown code block markers
         cleanCode = cleanCode.replace(/^```python\s*/gm, '');
         cleanCode = cleanCode.replace(/^```\s*/gm, '');
         cleanCode = cleanCode.replace(/```$/gm, '');
         
-        // Remove import statements 
-        cleanCode = cleanCode.replace(/^import.*$/gm, '');
-        cleanCode = cleanCode.replace(/^from.*$/gm, '');
-        
-        // Update function names and add proper indentation
-        cleanCode = cleanCode.replace(/^def test_.*?\(.*?\):/gm, '    def test_' + (parseInt(index) + 1) + '_' + testCase.title.toLowerCase().replace(/[^a-z0-9]/g, '_') + '(self):');
-        // Add proper indentation for lines that don't start with 4 spaces
-        const fourSpaces = '    ';
-        cleanCode = cleanCode.replace(/^(?!\s{4})/gm, fourSpaces);
-        
         content += cleanCode + '\n\n';
       }
     });
-    
-    content += `
-if __name__ == "__main__":
-    # Run tests
-    pytest.main([__file__, "-v"])
-`;
     
     // Create and download file
     const blob = new Blob([content], { type: 'text/python' });
@@ -322,6 +273,13 @@ if __name__ == "__main__":
     if (onEditTestCase) {
       onEditTestCase(index, editedTestCase);
     }
+  };
+
+  const handleEditCode = (index, updatedGeneratedCode) => {
+    setGeneratedCodes(prev => ({
+      ...prev,
+      [index]: updatedGeneratedCode
+    }));
   };
 
   const handleRemoveTestCase = (index) => {
@@ -419,6 +377,7 @@ if __name__ == "__main__":
             onEdit={handleEditTestCase}
             onRemove={handleRemoveTestCase}
             onAddToContext={onAddToContext}
+            onEditCode={handleEditCode}
           />
         ))}
       </div>

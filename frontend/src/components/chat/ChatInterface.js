@@ -147,7 +147,17 @@ const ChatInterface = () => {
     <div className="chat-interface">
       <div className="chat-container">
         <div className="chat-messages-section">
-          <ChatMessages messages={messages} loading={loading} />
+          <ChatMessages 
+            messages={messages} 
+            loading={loading}
+            testCases={testCases}
+            onGenerateCode={handleGenerateCode}
+            onGenerateAllCodes={handleGenerateAllCodes}
+            currentUrl={currentUrl}
+            onEditTestCase={handleEditTestCase}
+            onRemoveTestCase={handleRemoveTestCase}
+            onAddToContext={handleAddToContext}
+          />
           <ChatInput 
             onSendMessage={handleSendMessage} 
             disabled={loading}
@@ -156,20 +166,6 @@ const ChatInterface = () => {
             onClearContext={handleClearContext}
           />
         </div>
-        
-        {testCases.length > 0 && (
-          <div className="test-cases-section">
-            <TestCasesList 
-              testCases={testCases}
-              onGenerateCode={handleGenerateCode}
-              onGenerateAllCodes={handleGenerateAllCodes}
-              currentUrl={currentUrl}
-              onEditTestCase={handleEditTestCase}
-              onRemoveTestCase={handleRemoveTestCase}
-              onAddToContext={handleAddToContext}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

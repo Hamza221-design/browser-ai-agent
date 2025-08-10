@@ -1,7 +1,18 @@
 import React, { useEffect, useRef } from 'react';
 import ChatMessage from './ChatMessage';
+import TestCasesList from './TestCasesList';
 
-const ChatMessages = ({ messages, loading }) => {
+const ChatMessages = ({ 
+  messages, 
+  loading, 
+  testCases,
+  onGenerateCode,
+  onGenerateAllCodes,
+  currentUrl,
+  onEditTestCase,
+  onRemoveTestCase,
+  onAddToContext
+}) => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -39,6 +50,22 @@ const ChatMessages = ({ messages, loading }) => {
               <span></span>
             </div>
             <p>Analyzing your request...</p>
+          </div>
+        </div>
+      )}
+      
+      {testCases.length > 0 && (
+        <div className="chat-message ai-message">
+          <div className="message-content">
+            <TestCasesList 
+              testCases={testCases}
+              onGenerateCode={onGenerateCode}
+              onGenerateAllCodes={onGenerateAllCodes}
+              currentUrl={currentUrl}
+              onEditTestCase={onEditTestCase}
+              onRemoveTestCase={onRemoveTestCase}
+              onAddToContext={onAddToContext}
+            />
           </div>
         </div>
       )}

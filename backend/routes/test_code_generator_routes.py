@@ -19,7 +19,7 @@ class TestCaseRequest(BaseModel):
     element_type: str
     test_steps: List[str]
     expected_behavior: str
-    html_chunk: str
+    html_code: str
 
 class TestCasesRequest(BaseModel):
     test_cases: List[TestCaseRequest]
@@ -61,7 +61,7 @@ async def generate_test_code(request: TestCasesRequest):
                 "element_type": test_case.element_type,
                 "test_steps": test_case.test_steps,
                 "expected_behavior": test_case.expected_behavior,
-                "html_chunk": test_case.html_chunk
+                "html_code": test_case.html_code
             }
             
             result = service.generate_test_code(test_case_dict)

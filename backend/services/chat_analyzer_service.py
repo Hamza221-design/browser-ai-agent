@@ -4,6 +4,8 @@ import logging
 import os
 import asyncio
 import math
+import chromadb
+from urllib.parse import urlparse
 from typing import Dict, List, Optional, Tuple
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
@@ -13,9 +15,25 @@ class ChatAnalyzerService:
         self.api_key = openai_api_key
         self.base_url = "https://api.openai.com/v1/chat/completions"
         self.prompts_dir = os.path.join(os.path.dirname(__file__), '..', 'prompts')
+        
+        # Initialize ChromaDB client
+        self.chroma_client = chromadb.PersistentClient(path=os.getenv("CHROMA_DB"))
 
-    def extract_url_and_requirements(self, user_message: str) -> Tuple[Optional[str], Optional[str], int, Dict[str, int]]:
-        """Extract URL, test requirements, number of test cases, and element priorities from user message."""
+    def _load_prompt(self, prompt_file: str) -> str:
+        """Load prompt template from file."""
+        prompt_path = os.path.join(self.prompts_dir, prompt_file)
+        try:
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            logging.error(f"Prompt file not found: {prompt_path}")
+            return ""
+        except Exception as e:
+            logging.error(f"Error loading prompt file {prompt_path}: {str(e)}")
+            return ""
+
+    def extract_url_and_requirements(self, user_message: str) -> Tuple[Optional[str], Optional[str], int]:
+        """Extract URL, test requirements, and number of test cases from user message."""
         logging.info(f"Extracting URL and requirements from message: '{user_message[:100]}...'")
         
         url_pattern = r'https?://[^\s]+'
@@ -23,7 +41,7 @@ class ChatAnalyzerService:
         
         if not urls:
             logging.warning("No URLs found in user message")
-            return None, None, 5, {}
+            return None, None, 5
             
         url = urls[0]
         logging.info(f"Extracted URL: {url}")
@@ -33,18 +51,14 @@ class ChatAnalyzerService:
         
         if not requirements:
             logging.warning(f"No requirements found after extracting URL from message")
-            return url, None, 5, {}
+            return url, None, 5
         
         # Extract number of test cases
         num_test_cases = self._extract_test_case_count(user_message)
         logging.info(f"Extracted test case count: {num_test_cases}")
         
-        # Determine element priorities based on requirements
-        element_priorities = self._determine_element_priorities(requirements)
-        logging.info(f"Element priorities: {element_priorities}")
-        
         logging.info(f"Extracted requirements: '{requirements}'")
-        return url, requirements, num_test_cases, element_priorities
+        return url, requirements, num_test_cases
     
     def _extract_test_case_count(self, message: str) -> int:
         """Extract the number of test cases requested from user message."""
@@ -87,57 +101,9 @@ class ChatAnalyzerService:
         logging.info("No test case count specified, using default: 5")
         return 5
     
-    def _determine_element_priorities(self, requirements: str) -> Dict[str, int]:
-        """Determine element priorities based on user requirements and default hierarchy."""
-        requirements_lower = requirements.lower()
-        
-        # Default priority hierarchy (higher number = higher priority)
-        default_priorities = {
-            'forms': 10,      # Highest priority - critical user interactions
-            'buttons': 9,     # High priority - action elements
-            'inputs': 8,      # High priority - user input elements
-            'navigation': 6,  # Medium priority - site structure
-            'links': 5,       # Medium-low priority - basic navigation
-            'images': 3,      # Low priority - content elements
-            'tables': 4       # Low-medium priority - data display
-        }
-        
-        # Boost priorities based on explicit mentions in requirements
-        priority_boosts = {}
-        
-        # Keywords that boost specific element priorities
-        element_keywords = {
-            'forms': ['form', 'login', 'signup', 'register', 'submit', 'registration', 'contact form'],
-            'buttons': ['button', 'click', 'submit', 'action', 'cta', 'call to action'],
-            'inputs': ['input', 'field', 'text box', 'password', 'email', 'validation', 'data entry'],
-            'navigation': ['navigation', 'nav', 'menu', 'header', 'footer', 'sidebar'],
-            'links': ['link', 'anchor', 'href', 'url', 'redirect'],
-            'images': ['image', 'img', 'photo', 'picture', 'gallery', 'media'],
-            'tables': ['table', 'data', 'grid', 'list', 'row', 'column']
-        }
-        
-        # Calculate priority boosts
-        for element_type, keywords in element_keywords.items():
-            mentions = sum(1 for keyword in keywords if keyword in requirements_lower)
-            if mentions > 0:
-                # Boost priority by 2 points per mention (max +6)
-                boost = min(mentions * 2, 6)
-                priority_boosts[element_type] = boost
-                logging.info(f"Boosting {element_type} priority by {boost} points ({mentions} mentions)")
-        
-        # Apply boosts to default priorities
-        final_priorities = {}
-        for element_type, base_priority in default_priorities.items():
-            boost = priority_boosts.get(element_type, 0)
-            final_priorities[element_type] = base_priority + boost
-        
-        # Sort by priority (highest first)
-        sorted_priorities = dict(sorted(final_priorities.items(), key=lambda x: x[1], reverse=True))
-        
-        logging.info(f"Final element priorities: {sorted_priorities}")
-        return sorted_priorities
 
-    async def _fetch_rendered_html_async(self, url: str) -> str:
+
+    async def _fetch_rendered_html_async(self, url: str) -> Dict:
         """Fetch fully rendered HTML using Playwright."""
         logging.info(f"Starting HTML fetch for URL: {url}")
         
@@ -153,21 +119,47 @@ class ChatAnalyzerService:
                 logging.debug("Waiting for page to stabilize...")
                 await asyncio.sleep(2)
                 
+                # Get page content including JavaScript rendered content
                 html = await page.content()
+                
+                # Get page title
+                title = await page.title()
+                
+                # Get page metadata
+                meta_description = await page.evaluate("() => document.querySelector('meta[name=\"description\"]')?.content || ''")
+                meta_keywords = await page.evaluate("() => document.querySelector('meta[name=\"keywords\"]')?.content || ''")
+                
+                # Get all text content
+                text_content = await page.evaluate("() => document.body.innerText")
+                
+                # Get JavaScript content
+                scripts = await page.evaluate("() => Array.from(document.scripts).map(s => s.textContent).join('\\n')")
+                
+                # Get CSS content
+                styles = await page.evaluate("() => Array.from(document.styleSheets).map(s => s.href).join('\\n')")
+                
                 html_length = len(html)
                 logging.info(f"Successfully fetched HTML for {url} - Content length: {html_length} characters")
                 
                 await browser.close()
                 logging.debug("Browser closed successfully")
                 
-                return html
+                return {
+                    'html': html,
+                    'title': title,
+                    'meta_description': meta_description,
+                    'meta_keywords': meta_keywords,
+                    'text_content': text_content,
+                    'scripts': scripts,
+                    'styles': styles
+                }
                 
         except Exception as e:
             logging.error(f"Failed to fetch HTML for URL {url}: {str(e)}")
             logging.error(f"Error type: {type(e).__name__}")
             raise
 
-    def _extract_elements_by_requirements(self, html_content: str, requirements: str, element_priorities: Dict[str, int] = {}) -> Dict[str, List]:
+    def _extract_elements_by_requirements(self, html_content: str, requirements: str) -> Dict[str, List]:
         """Extract HTML elements based on user requirements."""
         logging.info(f"Extracting elements based on requirements: '{requirements}'")
         logging.debug(f"HTML content length: {len(html_content)} characters")
@@ -214,13 +206,13 @@ class ChatAnalyzerService:
             elements['tables'] = soup.find_all('table')
             logging.info(f"Table keywords detected: {[kw for kw in table_keywords if kw in requirements_lower]}")
             
-        # If no specific elements found, extract elements based on priorities
+        # If no specific elements found, extract elements based on default order
         if not elements:
-            logging.warning("No specific keywords detected, extracting elements based on priority")
-            # Use priorities if available, otherwise use default order
-            priority_order = list(element_priorities.keys()) if element_priorities else ['forms', 'buttons', 'inputs', 'links']
+            logging.warning("No specific keywords detected, extracting elements based on default order")
+            # Use default order for element extraction
+            default_order = ['forms', 'buttons', 'inputs', 'links', 'navigation', 'images', 'tables']
             
-            for element_type in priority_order:
+            for element_type in default_order:
                 if element_type == 'forms':
                     elements['forms'] = soup.find_all('form')
                 elif element_type == 'buttons':
@@ -235,22 +227,10 @@ class ChatAnalyzerService:
                     elements['images'] = soup.find_all('img')
                 elif element_type == 'tables':
                     elements['tables'] = soup.find_all('table')
-        
-        # Sort elements by priority for processing order
-        if element_priorities:
-            sorted_elements = {}
-            for element_type in sorted(element_priorities.keys(), key=lambda x: element_priorities[x], reverse=True):
-                if element_type in elements and elements[element_type]:
-                    sorted_elements[element_type] = elements[element_type]
-            # Add any remaining elements not in priorities
-            for element_type, element_list in elements.items():
-                if element_type not in sorted_elements and element_list:
-                    sorted_elements[element_type] = element_list
-            elements = sorted_elements
             
         # Log element counts
         element_counts = {k: len(v) for k, v in elements.items() if v}
-        logging.info(f"Elements extracted (in priority order): {element_counts}")
+        logging.info(f"Elements extracted: {element_counts}")
         
         if not any(elements.values()):
             logging.warning("No elements found on the page")
@@ -305,20 +285,17 @@ class ChatAnalyzerService:
         logging.info(f"Total chunks created: {total_chunks}")
         return chunks
     
-    def _calculate_test_distribution(self, chunks: List[Dict], total_test_cases: int, element_priorities: Dict[str, int]) -> Dict[int, int]:
-        """Calculate how many test cases to generate for each chunk based on priorities."""
+    def _calculate_test_distribution(self, chunks: List[Dict], total_test_cases: int) -> Dict[int, int]:
+        """Calculate how many test cases to generate for each chunk."""
         if not chunks:
             return {}
             
-        # Calculate priority weights for each chunk
+        # Calculate weights based on element count
         chunk_weights = []
         for chunk in chunks:
-            element_type = chunk['element_type']
-            priority = element_priorities.get(element_type, 5)  # Default priority 5
             element_count = chunk.get('element_count', 1)
-            
-            # Weight = priority * log(element_count + 1) to balance priority and element count
-            weight = priority * math.log(element_count + 1)
+            # Weight = log(element_count + 1) to balance element count
+            weight = math.log(element_count + 1)
             chunk_weights.append(weight)
         
         # Distribute test cases proportionally to weights
@@ -341,13 +318,13 @@ class ChatAnalyzerService:
         difference = total_test_cases - allocated_tests
         
         if difference != 0:
-            # Sort chunks by priority (highest first) for adjustment
-            priority_sorted_indices = sorted(range(len(chunks)), 
-                                           key=lambda i: element_priorities.get(chunks[i]['element_type'], 5), 
-                                           reverse=True)
+            # Sort chunks by element count (highest first) for adjustment
+            element_count_sorted_indices = sorted(range(len(chunks)), 
+                                                key=lambda i: chunks[i].get('element_count', 1), 
+                                                reverse=True)
             
-            # Distribute the difference starting with highest priority chunks
-            for i in priority_sorted_indices:
+            # Distribute the difference starting with chunks having most elements
+            for i in element_count_sorted_indices:
                 if difference == 0:
                     break
                 if difference > 0:
@@ -360,15 +337,15 @@ class ChatAnalyzerService:
         logging.info(f"Test distribution calculation: total={total_test_cases}, weights={chunk_weights}, allocated={distribution}")
         return distribution
 
-    def _generate_test_cases_from_chunks(self, chunks: List[Dict], requirements: str, url: str, num_test_cases: int = 5, element_priorities: Dict[str, int] = {}) -> List[Dict]:
+    def _generate_test_cases_from_chunks(self, chunks: List[Dict], requirements: str, url: str, num_test_cases: int = 5) -> List[Dict]:
         """Generate test cases from HTML chunks based on requirements."""
         logging.info(f"Starting test case generation for {len(chunks)} chunks")
         logging.info(f"Requirements: '{requirements}', URL: {url}, Requested test cases: {num_test_cases}")
         
         all_test_cases = []
         
-        # Calculate test cases per chunk based on element priorities
-        chunk_test_distribution = self._calculate_test_distribution(chunks, num_test_cases, element_priorities)
+        # Calculate test cases per chunk
+        chunk_test_distribution = self._calculate_test_distribution(chunks, num_test_cases)
         logging.info(f"Test case distribution: {chunk_test_distribution}")
         
         for i, chunk in enumerate(chunks):
@@ -377,26 +354,26 @@ class ChatAnalyzerService:
             
             logging.info(f"Processing chunk {chunk_num}/{len(chunks)} - Element type: {chunk['element_type']}, Elements: {chunk['element_count']}, Test cases to generate: {chunk_test_count}")
             
-            # Get priority information for this element type
-            element_priority = element_priorities.get(chunk['element_type'], 5)
-            priority_context = f"Priority level: {element_priority}/16 (higher means more important)"
+            # Element type information
+            element_type = chunk['element_type']
             
-            prompt = f"""
+            # Load prompt template
+            prompt_template = self._load_prompt("generate_test_cases_from_chunks.txt")
+            if not prompt_template:
+                logging.error("Failed to load prompt template, using fallback")
+                prompt_template = """
 Based on the user requirements and HTML content, generate {chunk_test_count} comprehensive test cases.
 
 User Requirements: {requirements}
 Target URL: {url}
-Element Type: {chunk['element_type']}
-{priority_context}
+Element Type: {element_type}
 HTML Content:
-{chunk['html_content']}
+{html_content}
 
 **Important**
 - Generate exactly {chunk_test_count} test cases
 - Create well defined test cases that are necessary for the user requirements
-- Focus on the most important scenarios for {chunk['element_type']} elements
-- Consider the priority level when selecting test scenarios
-
+- Focus on the most important scenarios for {element_type} elements
 
 Provide JSON response:
 [
@@ -405,14 +382,22 @@ Provide JSON response:
         "description": "Clear description matching user requirements",
         "expected_behavior": "Expected outcome when test passes",
         "test_steps": ["Step 1", "Step 2", "Step 3"],
-        "element_type": "{chunk['element_type']}",
+        "element_type": "{element_type}",
         "test_type": "functional|validation|negative|positive",
         "html_code": "HTML code of the test case you generated based on the code and user requirements",
-        "chunk_number": {chunk_num},
-        "priority": {element_priority}
+        "chunk_number": {chunk_number}
     }}
 ]
 """
+            
+            prompt = prompt_template.format(
+                chunk_test_count=chunk_test_count,
+                requirements=requirements,
+                url=url,
+                element_type=chunk['element_type'],
+                html_content=chunk['html_content'],
+                chunk_number=chunk_num
+            )
 
             try:
                 logging.debug(f"Sending GPT request for chunk {chunk_num}")
@@ -439,30 +424,16 @@ Provide JSON response:
                 content = result["choices"][0]["message"]["content"]
                 logging.debug(f"GPT response length for chunk {chunk_num}: {len(content)} characters")
                 
-                json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                # Try multiple JSON extraction strategies
+                test_cases = self._extract_json_from_response(content)
                 
-                if json_match:
-                    import json
-                    try:
-                        json_content = json_match.group()
-                        # Clean up common JSON issues
-                        json_content = json_content.replace('\n', ' ').replace('\r', ' ')
-                        json_content = re.sub(r',\s*}', '}', json_content)  # Remove trailing commas before }
-                        json_content = re.sub(r',\s*]', ']', json_content)  # Remove trailing commas before ]
-                        
-                        test_cases = json.loads(json_content)
-                        for test_case in test_cases:
-                            test_case["html_chunk"] = chunk['html_content'][:1000] + "..." if len(chunk['html_content']) > 1000 else chunk['html_content']
-                        all_test_cases.extend(test_cases)
-                        logging.info(f"Generated {len(test_cases)} test cases for chunk {i+1}")
-                    except json.JSONDecodeError as json_error:
-                        logging.error(f"JSON decode error for chunk {i+1}: {str(json_error)}")
-                        logging.debug(f"Problematic JSON: {json_match.group()[:500]}...")
-                        # Create fallback test case
-                        fallback_case = self._create_fallback_test_case(chunk, requirements, i+1)
-                        all_test_cases.append(fallback_case)
+                if test_cases:
+                    for test_case in test_cases:
+                        test_case["html_chunk"] = chunk['html_content'][:1000] + "..." if len(chunk['html_content']) > 1000 else chunk['html_content']
+                    all_test_cases.extend(test_cases)
+                    logging.info(f"Generated {len(test_cases)} test cases for chunk {i+1}")
                 else:
-                    logging.warning(f"No JSON found in response for chunk {i+1}")
+                    logging.warning(f"No valid JSON found in response for chunk {i+1}, creating fallback test case")
                     # Create fallback test case
                     fallback_case = self._create_fallback_test_case(chunk, requirements, i+1)
                     all_test_cases.append(fallback_case)
@@ -474,6 +445,356 @@ Provide JSON response:
                 all_test_cases.append(fallback_case)
                 
         return all_test_cases
+
+    def _generate_test_cases_from_chunks_with_embeddings(self, requirements: str, url: str, num_test_cases: int = 5, relevant_embeddings: List[Dict] = []) -> List[Dict]:
+        """Generate test cases based on requirements and embedding context."""
+        logging.info(f"Starting test case generation with {len(relevant_embeddings)} relevant embeddings")
+        logging.info(f"Requirements: '{requirements}', URL: {url}, Requested test cases: {num_test_cases}")
+        logging.info(f"Relevant embeddings: {relevant_embeddings}")
+        
+        all_test_cases = []
+        
+        # Load prompt template
+        prompt_template = self._load_prompt("generate_test_cases_with_embeddings.txt")
+        if not prompt_template:
+            logging.error("Failed to load prompt template, using fallback")
+            prompt_template = """
+Based on the user requirements and historical page context, generate {num_test_cases} comprehensive test cases.
+
+User Requirements: {requirements}
+Target URL: {url}
+Historical Context: {relevant_embeddings}
+
+**Important**
+- Generate exactly {num_test_cases} test cases
+- Create well defined test cases that are necessary for the user requirements
+- Focus on the most important scenarios based on the requirements
+- Use historical context to understand page patterns and functionality
+- Consider different element types (forms, buttons, inputs, links, etc.) based on requirements
+- Generate diverse test types (functional, validation, negative, positive) as appropriate
+
+Provide JSON response:
+[
+    {{
+        "title": "Descriptive test case title",
+        "description": "Clear description matching user requirements",
+        "expected_behavior": "Expected outcome when test passes",
+        "test_steps": ["Step 1", "Step 2", "Step 3"],
+        "element_type": "form|button|input|link|navigation|image|table",
+        "test_type": "functional|validation|negative|positive",
+        "html_code": "HTML code of the test case you generated based on the requirements and context"
+    }}
+]
+"""
+        
+        prompt = prompt_template.format(
+            num_test_cases=num_test_cases,
+            requirements=requirements,
+            url=url,
+            relevant_embeddings=relevant_embeddings
+        )
+
+        try:
+            logging.debug(f"Sending GPT request for test case generation")
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "You are an expert QA engineer who generates test cases based on user requirements and historical page context."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 2000
+            }
+            
+            response = requests.post(self.base_url, headers=headers, json=data, timeout=60)
+            response.raise_for_status()
+            result = response.json()
+            
+            logging.debug(f"Received GPT response - Status: {response.status_code}")
+            
+            content = result["choices"][0]["message"]["content"]
+            logging.debug(f"GPT response length: {len(content)} characters")
+            logging.info(f"GPT response: {content}")
+            
+            # Try multiple JSON extraction strategies
+            test_cases = self._extract_json_from_response(content)
+            
+            if test_cases:
+                all_test_cases.extend(test_cases)
+                logging.info(f"Generated {len(test_cases)} test cases successfully")
+            else:
+                logging.warning(f"No valid JSON found in response, creating fallback test case")
+                # Create fallback test case
+                fallback_case = self._create_fallback_test_case_general(requirements, url)
+                all_test_cases.append(fallback_case)
+                
+        except Exception as e:
+            logging.error(f"Error generating test cases: {str(e)}")
+            # Create fallback test case for any other errors
+            fallback_case = self._create_fallback_test_case_general(requirements, url)
+            all_test_cases.append(fallback_case)
+                
+        return all_test_cases
+
+    def _extract_json_from_response(self, content: str) -> List[Dict]:
+        """Extract and parse JSON from GPT response using multiple strategies."""
+        import json
+        
+        logging.debug(f"Starting JSON extraction from response of length: {len(content)}")
+        logging.debug(f"Response preview: {content[:200]}...")
+        
+        # Strategy 0: Direct JSON parsing (if content is already clean JSON)
+        try:
+            cleaned_content = self._clean_json_string(content)
+            test_cases = json.loads(cleaned_content)
+            if isinstance(test_cases, list) and test_cases:
+                logging.info(f"Successfully parsed JSON directly")
+                return test_cases
+        except json.JSONDecodeError as e:
+            logging.debug(f"Direct parsing failed: {str(e)}")
+        
+        # Strategy 0.5: Try to extract JSON from markdown code blocks first
+        try:
+            # Look for ```json ... ``` pattern
+            code_block_match = re.search(r'```json\s*\n(.*?)\n```', content, re.DOTALL)
+            if code_block_match:
+                json_content = code_block_match.group(1)
+                logging.debug(f"Strategy 0.5 - Found JSON in code block: {json_content[:100]}...")
+                test_cases = json.loads(json_content)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON from code block")
+                    return test_cases
+        except Exception as e:
+            logging.debug(f"Code block extraction failed: {str(e)}")
+        
+        # Strategy 1: Look for JSON array with regex
+        json_match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+        if json_match:
+            try:
+                json_content = json_match.group()
+                logging.debug(f"Strategy 1 - Found JSON array: {json_content[:100]}...")
+                cleaned_json = self._clean_json_string(json_content)
+                test_cases = json.loads(cleaned_json)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON using regex strategy")
+                    return test_cases
+            except json.JSONDecodeError as e:
+                logging.debug(f"Regex strategy failed: {str(e)}")
+                logging.debug(f"Failed content: {json_content[:200]}...")
+        
+        # Strategy 2: Look for JSON object with regex (single test case)
+        json_match = re.search(r'\{[^{}]*"title"[^{}]*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                json_content = json_match.group()
+                cleaned_json = self._clean_json_string(json_content)
+                test_case = json.loads(cleaned_json)
+                if isinstance(test_case, dict) and "title" in test_case:
+                    logging.info(f"Successfully extracted single test case JSON")
+                    return [test_case]
+            except json.JSONDecodeError as e:
+                logging.debug(f"Single object strategy failed: {str(e)}")
+        
+        # Strategy 3: Try to find JSON between markdown code blocks
+        code_block_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', content, re.DOTALL)
+        if code_block_match:
+            try:
+                json_content = code_block_match.group(1)
+                cleaned_json = self._clean_json_string(json_content)
+                test_cases = json.loads(cleaned_json)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON from code block")
+                    return test_cases
+            except json.JSONDecodeError as e:
+                logging.debug(f"Code block strategy failed: {str(e)}")
+        
+        # Strategy 3.5: Try to find JSON between markdown code blocks with more flexible pattern
+        code_block_patterns = [
+            r'```json\s*\n(.*?)\n```',
+            r'```\s*\n(.*?)\n```',
+            r'```(.*?)```',
+            r'```json\s*(.*?)\s*```',
+            r'```\s*(.*?)\s*```'
+        ]
+        
+        for pattern in code_block_patterns:
+            code_block_match = re.search(pattern, content, re.DOTALL)
+            if code_block_match:
+                logging.debug(f"Found code block match with pattern: {pattern}")
+                try:
+                    json_content = code_block_match.group(1)
+                    logging.debug(f"Extracted content from code block: {json_content[:100]}...")
+                    # Remove any language identifier at the start
+                    json_content = re.sub(r'^json\s*\n', '', json_content)
+                    cleaned_json = self._clean_json_string(json_content)
+                    logging.debug(f"Cleaned JSON: {cleaned_json[:100]}...")
+                    test_cases = json.loads(cleaned_json)
+                    if isinstance(test_cases, list) and test_cases:
+                        logging.info(f"Successfully extracted JSON from code block using pattern: {pattern}")
+                        return test_cases
+                except json.JSONDecodeError as e:
+                    logging.debug(f"Code block pattern {pattern} failed: {str(e)}")
+                    logging.debug(f"Failed JSON content: {json_content[:200]}...")
+                    continue
+        
+        # Strategy 4: Try to extract multiple JSON objects
+        json_objects = re.findall(r'\{[^{}]*"title"[^{}]*\}', content, re.DOTALL)
+        if json_objects:
+            test_cases = []
+            for obj_str in json_objects:
+                try:
+                    cleaned_json = self._clean_json_string(obj_str)
+                    test_case = json.loads(cleaned_json)
+                    if isinstance(test_case, dict) and "title" in test_case:
+                        test_cases.append(test_case)
+                except json.JSONDecodeError:
+                    continue
+            
+            if test_cases:
+                logging.info(f"Successfully extracted {len(test_cases)} test cases from multiple objects")
+                return test_cases
+        
+        # Strategy 5: Try to fix common JSON issues and parse
+        try:
+            # Remove any text before the first [ and after the last ]
+            start_idx = content.find('[')
+            end_idx = content.rfind(']')
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_content = content[start_idx:end_idx + 1]
+                cleaned_json = self._clean_json_string(json_content)
+                test_cases = json.loads(cleaned_json)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON using bracket strategy")
+                    return test_cases
+        except json.JSONDecodeError as e:
+            logging.debug(f"Bracket strategy failed: {str(e)}")
+        
+        # Strategy 6: Last resort - try to extract JSON from the entire content
+        logging.debug("Trying last resort strategy - extracting JSON from entire content")
+        try:
+            # Try to find any JSON-like structure
+            # Look for content that starts with [ and ends with ]
+            lines = content.split('\n')
+            json_start = -1
+            json_end = -1
+            
+            for i, line in enumerate(lines):
+                if '[' in line and json_start == -1:
+                    json_start = i
+                if ']' in line and json_start != -1:
+                    json_end = i
+                    break
+            
+            if json_start != -1 and json_end != -1:
+                json_lines = lines[json_start:json_end + 1]
+                json_content = '\n'.join(json_lines)
+                logging.debug(f"Last resort - extracted JSON content: {json_content[:200]}...")
+                cleaned_json = self._clean_json_string(json_content)
+                test_cases = json.loads(cleaned_json)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON using last resort strategy")
+                    return test_cases
+        except Exception as e:
+            logging.debug(f"Last resort strategy failed: {str(e)}")
+        
+        # Strategy 7: Try to find JSON array with more specific pattern
+        try:
+            # Look for content that starts with [ and contains objects with "title"
+            pattern = r'\[\s*\{\s*"title"[^\]]*\]'
+            json_match = re.search(pattern, content, re.DOTALL)
+            if json_match:
+                json_content = json_match.group()
+                logging.debug(f"Strategy 7 - Found JSON with title pattern: {json_content[:200]}...")
+                cleaned_json = self._clean_json_string(json_content)
+                test_cases = json.loads(cleaned_json)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON using title pattern strategy")
+                    return test_cases
+        except Exception as e:
+            logging.debug(f"Title pattern strategy failed: {str(e)}")
+        
+        logging.warning("All JSON extraction strategies failed")
+        logging.debug(f"Full content that failed to parse: {content}")
+        
+        # Final debug: Try to manually extract JSON from the content
+        logging.debug("Attempting manual JSON extraction...")
+        try:
+            # Remove any markdown code blocks
+            content_clean = re.sub(r'```.*?```', '', content, flags=re.DOTALL)
+            # Remove any leading/trailing text
+            start_idx = content_clean.find('[')
+            end_idx = content_clean.rfind(']')
+            if start_idx != -1 and end_idx != -1:
+                manual_json = content_clean[start_idx:end_idx + 1]
+                logging.debug(f"Manual extraction found: {manual_json[:200]}...")
+                test_cases = json.loads(manual_json)
+                if isinstance(test_cases, list) and test_cases:
+                    logging.info(f"Successfully extracted JSON using manual extraction")
+                    return test_cases
+        except Exception as e:
+            logging.debug(f"Manual extraction failed: {str(e)}")
+        
+        # Ultimate fallback: Try to parse the entire content as JSON
+        logging.debug("Attempting ultimate fallback - parse entire content as JSON")
+        try:
+            # This should work for the JSON you provided
+            test_cases = json.loads(content)
+            if isinstance(test_cases, list) and test_cases:
+                logging.info(f"Successfully parsed entire content as JSON")
+                return test_cases
+        except Exception as e:
+            logging.debug(f"Ultimate fallback failed: {str(e)}")
+        
+        return []
+
+    def _clean_json_string(self, json_str: str) -> str:
+        """Clean and fix common JSON formatting issues."""
+        # Remove any leading/trailing whitespace
+        cleaned = json_str.strip()
+        
+        # Remove markdown code block markers if present
+        cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned)
+        cleaned = re.sub(r'\n?```$', '', cleaned)
+        
+        # Keep original formatting - don't normalize newlines
+        # This preserves the JSON structure better
+        
+        # Remove trailing commas before } and ]
+        cleaned = re.sub(r',\s*}', '}', cleaned)
+        cleaned = re.sub(r',\s*]', ']', cleaned)
+        
+        # Fix common HTML entity issues in the JSON
+        cleaned = cleaned.replace('&quot;', '"')
+        cleaned = cleaned.replace('&amp;', '&')
+        cleaned = cleaned.replace('&lt;', '<')
+        cleaned = cleaned.replace('&gt;', '>')
+        
+        # Ensure proper JSON structure
+        cleaned = cleaned.strip()
+        
+        logging.debug(f"Cleaned JSON string: {cleaned[:200]}...")
+        
+        return cleaned
+
+    def _create_fallback_test_case_general(self, requirements: str, url: str) -> Dict:
+        """Create a fallback test case when JSON parsing fails."""
+        return {
+            "title": f"Fallback test based on requirements",
+            "description": f"Basic test case based on requirements: {requirements}",
+            "expected_behavior": f"Verify functionality based on requirements",
+            "test_steps": [
+                f"Navigate to {url}",
+                "Locate relevant elements",
+                "Test functionality based on requirements"
+            ],
+            "element_type": "general",
+            "test_type": "functional",
+            "html_code": f"<!-- Test for {url} based on requirements: {requirements} -->"
+        }
 
     def _create_fallback_test_case(self, chunk: Dict, requirements: str, chunk_num: int) -> Dict:
         """Create a fallback test case when JSON parsing fails."""
@@ -493,13 +814,229 @@ Provide JSON response:
             "html_chunk": chunk['html_content'][:1000] + "..." if len(chunk['html_content']) > 1000 else chunk['html_content']
         }
 
+    def _get_domain_from_url(self, url: str) -> str:
+        """Extract domain name from URL for collection naming."""
+        parsed = urlparse(url)
+        return parsed.netloc.replace('.', '_').replace('-', '_')
+
+    def _get_url_path(self, url: str) -> str:
+        """Extract URL path for metadata."""
+        parsed = urlparse(url)
+        return parsed.path or '/'
+
+    def _check_embedding_exists(self, domain: str, url: str) -> bool:
+        """Check if embedding already exists for the URL."""
+        try:
+            collection = self.chroma_client.get_collection(name=domain)
+            results = collection.get(
+                where={"url": url},
+                limit=1
+            )
+            return len(results['ids']) > 0
+        except:
+            return False
+
+    def _create_embeddings(self, domain: str, url: str, page_data: Dict) -> None:
+        """Create and store embeddings for page content in chunks of 1000 characters."""
+        try:
+            # Get or create collection
+            try:
+                collection = self.chroma_client.get_collection(name=domain)
+            except:
+                collection = self.chroma_client.create_collection(name=domain)
+
+            # Prepare content chunks
+            content_chunks = []
+            
+            # Add title as first chunk
+            if page_data.get('title'):
+                content_chunks.append({
+                    'content': f"Page Title: {page_data['title']}",
+                    'chunk_type': 'title',
+                    'chunk_index': 0
+                })
+            
+            # Add meta description as chunk
+            if page_data.get('meta_description'):
+                content_chunks.append({
+                    'content': f"Page Description: {page_data['meta_description']}",
+                    'chunk_type': 'meta_description',
+                    'chunk_index': len(content_chunks)
+                })
+            
+            # Add meta keywords as chunk
+            if page_data.get('meta_keywords'):
+                content_chunks.append({
+                    'content': f"Page Keywords: {page_data['meta_keywords']}",
+                    'chunk_type': 'meta_keywords',
+                    'chunk_index': len(content_chunks)
+                })
+            
+            # Split text content into chunks
+            if page_data.get('text_content'):
+                text_content = page_data['text_content']
+                text_chunks = self._split_text_into_chunks(text_content, 1000)
+                for i, chunk in enumerate(text_chunks):
+                    content_chunks.append({
+                        'content': f"Text Content (Part {i+1}): {chunk}",
+                        'chunk_type': 'text_content',
+                        'chunk_index': len(content_chunks)
+                    })
+            
+            # Split HTML content into chunks
+            if page_data.get('html'):
+                html_content = page_data['html']
+                html_chunks = self._split_text_into_chunks(html_content, 1000)
+                for i, chunk in enumerate(html_chunks):
+                    content_chunks.append({
+                        'content': f"HTML Structure (Part {i+1}): {chunk}",
+                        'chunk_type': 'html_structure',
+                        'chunk_index': len(content_chunks)
+                    })
+            
+            # Add JavaScript content as chunks
+            if page_data.get('scripts'):
+                scripts_content = page_data['scripts']
+                scripts_chunks = self._split_text_into_chunks(scripts_content, 1000)
+                for i, chunk in enumerate(scripts_chunks):
+                    content_chunks.append({
+                        'content': f"JavaScript (Part {i+1}): {chunk}",
+                        'chunk_type': 'javascript',
+                        'chunk_index': len(content_chunks)
+                    })
+            
+            # Add CSS content as chunks
+            if page_data.get('styles'):
+                styles_content = page_data['styles']
+                styles_chunks = self._split_text_into_chunks(styles_content, 1000)
+                for i, chunk in enumerate(styles_chunks):
+                    content_chunks.append({
+                        'content': f"CSS (Part {i+1}): {chunk}",
+                        'chunk_type': 'css',
+                        'chunk_index': len(content_chunks)
+                    })
+
+            # Prepare documents, metadatas, and ids for batch insertion
+            documents = []
+            metadatas = []
+            ids = []
+            
+            for i, chunk_data in enumerate(content_chunks):
+                # Base metadata
+                metadata = {
+                    "url": url,
+                    "domain": domain,
+                    "path": self._get_url_path(url),
+                    "title": page_data.get('title', ''),
+                    "meta_description": page_data.get('meta_description', ''),
+                    "meta_keywords": page_data.get('meta_keywords', ''),
+                    "content_length": len(page_data.get('html', '')),
+                    "text_length": len(page_data.get('text_content', '')),
+                    "has_scripts": bool(page_data.get('scripts')),
+                    "has_styles": bool(page_data.get('styles')),
+                    "timestamp": str(asyncio.get_event_loop().time()),
+                    "chunk_type": chunk_data['chunk_type'],
+                    "chunk_index": chunk_data['chunk_index'],
+                    "total_chunks": len(content_chunks),
+                    "chunk_content_length": len(chunk_data['content'])
+                }
+                
+                documents.append(chunk_data['content'])
+                metadatas.append(metadata)
+                ids.append(f"{domain}_{hash(url)}_chunk_{i}")
+
+            # Add all chunks to collection in batch
+            if documents:
+                collection.add(
+                    documents=documents,
+                    metadatas=metadatas,
+                    ids=ids
+                )
+                
+                logging.info(f"Created {len(documents)} embedding chunks for {url} in collection {domain}")
+                logging.info(f"Chunk types: {[chunk['chunk_type'] for chunk in content_chunks]}")
+            else:
+                logging.warning(f"No content chunks created for {url}")
+
+        except Exception as e:
+            logging.error(f"Error creating embeddings for {url}: {str(e)}")
+
+    def _split_text_into_chunks(self, text: str, chunk_size: int = 1000) -> List[str]:
+        """Split text into chunks of specified size, trying to break at word boundaries."""
+        if len(text) <= chunk_size:
+            return [text]
+        
+        chunks = []
+        start = 0
+        
+        while start < len(text):
+            end = start + chunk_size
+            
+            # If this is not the last chunk, try to break at a word boundary
+            if end < len(text):
+                # Look for the last space or newline within the chunk
+                last_space = text.rfind(' ', start, end)
+                last_newline = text.rfind('\n', start, end)
+                break_point = max(last_space, last_newline)
+                
+                if break_point > start:
+                    end = break_point + 1
+            
+            chunks.append(text[start:end].strip())
+            start = end
+        
+        return chunks
+
+    def _get_relevant_embeddings(self, domain: str, requirements: str, max_distance: float = 2.5) -> List[Dict]:
+        """Retrieve relevant embeddings based on requirements."""
+        try:
+            collection = self.chroma_client.get_collection(name=domain)
+            
+            # First try with requirements as query
+            results = collection.query(
+                query_texts=[requirements],
+                n_results=10,
+                where={"domain": domain}
+            )
+            
+            relevant_docs = []
+            for i, distance in enumerate(results['distances'][0]):
+                if distance <= max_distance:
+                    relevant_docs.append({
+                        'content': results['documents'][0][i],
+                        'metadata': results['metadatas'][0][i],
+                        'distance': distance
+                    })
+            
+            # If no relevant docs found, try with broader search
+            if not relevant_docs:
+                logging.info(f"No embeddings found with distance <= {max_distance}, trying broader search")
+                # Get all embeddings for the domain
+                all_results = collection.get(where={"domain": domain})
+                if all_results['ids']:
+                    # Use the first few embeddings as context
+                    for i in range(min(3, len(all_results['ids']))):
+                        relevant_docs.append({
+                            'content': all_results['documents'][i],
+                            'metadata': all_results['metadatas'][i],
+                            'distance': 3.0  # High distance to indicate it's a fallback
+                        })
+                    logging.info(f"Using {len(relevant_docs)} fallback embeddings from domain")
+            
+            logging.info(f"Retrieved {len(relevant_docs)} relevant embeddings for requirements")
+            return relevant_docs
+            
+        except Exception as e:
+            logging.error(f"Error retrieving embeddings: {str(e)}")
+            return []
+
     async def process_chat_message(self, user_message: str) -> Dict:
         """Process user chat message and return test cases."""
         logging.info(f"=== Starting chat message processing ===")
         logging.info(f"User message length: {len(user_message)} characters")
         
-        # Extract URL, requirements, test case count, and element priorities
-        url, requirements, num_test_cases, element_priorities = self.extract_url_and_requirements(user_message)
+        # Extract URL, requirements, and test case count
+        url, requirements, num_test_cases = self.extract_url_and_requirements(user_message)
         
         if not url:
             logging.error("Chat processing failed: No URL found in message")
@@ -518,40 +1055,49 @@ Provide JSON response:
         try:
             logging.info(f"Starting full processing pipeline for URL: {url}")
             
-            # Fetch HTML content
-            html_content = await self._fetch_rendered_html_async(url)
+            # Get domain for ChromaDB collection
+            domain = self._get_domain_from_url(url)
             
-            # Extract relevant elements based on requirements and priorities
-            elements = self._extract_elements_by_requirements(html_content, requirements, element_priorities)
-            
-            if not any(elements.values()):
-                logging.error("Chat processing failed: No relevant elements found on page")
-                return {
-                    "error": "No relevant elements found",
-                    "message": "No elements matching your requirements were found on the page"
-                }
+            # Check if embedding already exists
+            if not self._check_embedding_exists(domain, url):
+                logging.info(f"Creating embeddings for {url}")
+                # Fetch HTML content
+                page_data = await self._fetch_rendered_html_async(url)
                 
-            # Create chunks
-            chunks = self._create_chunks(elements)
+                # Create embeddings
+                self._create_embeddings(domain, url, page_data)
+                html_content = page_data['html']
+            else:
+                logging.info(f"Embeddings already exist for {url}")
+                # Fetch HTML content for current processing
+                page_data = await self._fetch_rendered_html_async(url)
+                html_content = page_data['html']
             
-            # Generate test cases
-            test_cases = self._generate_test_cases_from_chunks(chunks, requirements, url, num_test_cases, element_priorities)
+            # Get relevant embeddings for requirements
+            relevant_embeddings = self._get_relevant_embeddings(domain, requirements, 2.0)
+            if not relevant_embeddings:
+                logging.info(f"No embeddings found for domain {domain}, will use current page content only")
+            else:
+                embedding_types = [("Fallback" if emb['distance'] >= 3.0 else "Relevant") for emb in relevant_embeddings]
+                logging.info(f"Found {len(relevant_embeddings)} embeddings for domain {domain}: {embedding_types}")
             
-            # Calculate element counts
-            element_counts = {k: len(v) for k, v in elements.items() if v}
+            # Note: We no longer extract elements or create chunks since test generation is based on requirements and embeddings
+            
+            # Generate test cases with embedding context
+            test_cases = self._generate_test_cases_from_chunks_with_embeddings(
+                requirements, url, num_test_cases, relevant_embeddings
+            )
             
             success_result = {
                 "url": url,
                 "requirements": requirements,
                 "test_cases": test_cases,
                 "total_cases": len(test_cases),
-                "element_counts": element_counts,
                 "message": f"Generated {len(test_cases)} test cases based on your requirements"
             }
             
             logging.info(f"=== Chat processing completed successfully ===")
-            logging.info(f"Generated {len(test_cases)} test cases for {len(chunks)} chunks")
-            logging.info(f"Element counts: {element_counts}")
+            logging.info(f"Generated {len(test_cases)} test cases based on requirements and embeddings")
             
             return success_result
             

@@ -13,7 +13,8 @@ const TestCodeDisplay = ({ testCode, filename, status, onEdit, onRemove, index }
   };
 
   const handleSave = () => {
-    onEdit(index, editedCode);
+    // Use the cleaned code (without markdown markers) when saving
+    onEdit(index, cleanEditedCode);
     setIsEditing(false);
   };
 

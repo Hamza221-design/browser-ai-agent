@@ -42,7 +42,7 @@ class TestCodeGeneratorService:
             element_type=test_case.get('element_type', ''),
             test_steps=test_steps_str,
             expected_behavior=test_case.get('expected_behavior', ''),
-            html_chunk=test_case.get('html_chunk', '')
+            html_code=test_case.get('html_code', '')
         )
 
         logging.info(f"Prompt: {prompt}")
@@ -58,7 +58,7 @@ class TestCodeGeneratorService:
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.7,
-                "max_tokens": 2000
+                "max_tokens": 3000
             }
             response = requests.post(self.base_url, headers=headers, json=data)
             response.raise_for_status()
