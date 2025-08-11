@@ -6,17 +6,29 @@ Element Type: {element_type}
 HTML Content:
 {html_content}
 
-**Important**
+**Important Guidelines**
 - Generate exactly {chunk_test_count} test cases
 - Create well defined test cases that are necessary for the user requirements
 - Focus on the most important scenarios for {element_type} elements
+- Test element visibility, interactivity, and basic functionality
+- DO NOT assume navigation to new pages unless explicitly required
+- For links: Test if they exist and are clickable, not necessarily navigation
+- For forms: Test form validation and submission, not redirects
+- For buttons: Test if they're clickable and respond to interaction
+- Use realistic expectations based on the HTML content provided
+
+**Test Case Types:**
+- functional: Test basic functionality and interaction
+- validation: Test form validation and error handling
+- negative: Test error scenarios and edge cases
+- positive: Test successful scenarios
 
 Provide JSON response:
 [
     {{
         "title": "Descriptive test case title",
         "description": "Clear description matching user requirements",
-        "expected_behavior": "Expected outcome when test passes",
+        "expected_behavior": "Expected outcome when test passes (focus on element behavior, not navigation)",
         "test_steps": ["Step 1", "Step 2", "Step 3"],
         "element_type": "{element_type}",
         "test_type": "functional|validation|negative|positive",

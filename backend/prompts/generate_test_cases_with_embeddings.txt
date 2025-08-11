@@ -1,11 +1,10 @@
-Based on the user requirements and historical page context, generate {num_test_cases} comprehensive test cases.
+Based on the user requirements and historical page context, generate comprehensive test cases.
 
 User Requirements: {requirements}
 Target URL: {url}
 Historical Context: {relevant_embeddings}
 
 **Important**
-- Generate exactly {num_test_cases} test cases
 - Create well defined test cases that are necessary for the user requirements
 - Focus on the most important scenarios based on the requirements
 - Use historical context to understand page patterns and functionality

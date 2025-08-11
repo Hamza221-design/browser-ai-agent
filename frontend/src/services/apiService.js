@@ -21,16 +21,28 @@ const apiService = {
   },
 
   generateTestCode: async (testCase) => {
+    // Map html_chunk to html_code for the /generate-test-code endpoint
+    const mappedTestCase = {
+      ...testCase,
+      html_code: testCase.html_chunk || testCase.html_code || ''
+    };
+    
     const requestData = {
-      test_cases: [testCase]
+      test_cases: [mappedTestCase]
     };
     const response = await axios.post(`${API_BASE_URL}/generate-test-code`, requestData);
     return response.data.results[0];
   },
 
   generateMultipleTestCodes: async (testCases) => {
+    // Map html_chunk to html_code for each test case
+    const mappedTestCases = testCases.map(testCase => ({
+      ...testCase,
+      html_code: testCase.html_chunk || testCase.html_code || ''
+    }));
+    
     const requestData = {
-      test_cases: testCases
+      test_cases: mappedTestCases
     };
     const response = await axios.post(`${API_BASE_URL}/generate-test-code`, requestData);
     return response.data.results;

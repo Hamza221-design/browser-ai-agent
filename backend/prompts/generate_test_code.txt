@@ -29,7 +29,21 @@ Requirements:
 - Add wait conditions for elements to be ready
 - IMPORTANT: Use the exact URL "{url}" in page.goto() - DO NOT use placeholder URLs like example.com
 - Replace ALL placeholder URLs with the actual URL: {url}
-- Return only the Python code, no explanation
+- Always add raise keyword in the except Exception as e: 
+
+CRITICAL TESTING GUIDELINES:
+- For link tests: Check if links exist and are clickable, but DON'T assume they navigate to new pages
+- For form tests: Focus on form validation and submission, not necessarily successful redirects
+- For navigation tests: Verify elements are present and interactive, not that they change URLs
+- Use flexible assertions that don't assume specific URL changes
+- Add proper error handling for elements that might not exist
+- Use try-catch blocks for potentially failing operations
+- Test element visibility and interactivity rather than specific outcomes
+- For external links: Check if they open in new tabs/windows instead of expecting navigation
+- Use page.wait_for_load_state() after navigation attempts
+- Add fallback selectors and multiple ways to find elements
+
+Return only the Python code, no explanation
 
 Generate a complete test function that can be executed with browser mode by default.
 

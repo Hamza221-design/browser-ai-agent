@@ -38,7 +38,17 @@ const ChatMessages = ({
       )}
       
       {messages.map((message) => (
-        <ChatMessage key={message.id} message={message} />
+        <ChatMessage 
+          key={message.id} 
+          message={message}
+          testCases={message.data?.test_cases || []}
+          currentUrl={message.data?.url || currentUrl}
+          onGenerateCode={onGenerateCode}
+          onGenerateAllCodes={onGenerateAllCodes}
+          onEditTestCase={onEditTestCase}
+          onRemoveTestCase={onRemoveTestCase}
+          onAddToContext={onAddToContext}
+        />
       ))}
       
       {loading && (
@@ -50,22 +60,6 @@ const ChatMessages = ({
               <span></span>
             </div>
             <p>Analyzing your request...</p>
-          </div>
-        </div>
-      )}
-      
-      {testCases.length > 0 && (
-        <div className="chat-message ai-message">
-          <div className="message-content">
-            <TestCasesList 
-              testCases={testCases}
-              onGenerateCode={onGenerateCode}
-              onGenerateAllCodes={onGenerateAllCodes}
-              currentUrl={currentUrl}
-              onEditTestCase={onEditTestCase}
-              onRemoveTestCase={onRemoveTestCase}
-              onAddToContext={onAddToContext}
-            />
           </div>
         </div>
       )}

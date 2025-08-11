@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const TestCodeDisplay = ({ testCode, filename, status, onEdit, onRemove, index }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCode, setEditedCode] = useState(testCode);
+  
+  // Update editedCode when testCode prop changes
+  useEffect(() => {
+    setEditedCode(testCode);
+  }, [testCode]);
   
   // Clean up the test code by removing markdown code blocks
   const cleanEditedCode = editedCode.replace(/```python\n?/g, '').replace(/```\n?/g, '').trim();

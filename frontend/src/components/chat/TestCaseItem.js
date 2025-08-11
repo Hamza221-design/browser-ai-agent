@@ -114,7 +114,7 @@ const TestCaseItem = ({ testCase, index, generatedCode, isGenerating, onGenerate
               </button>
 
               <button onClick={handleAddToContext} className="add-to-context-btn">
-                📎 Add to Context
+                 Add to Context
               </button>
 
               <button onClick={handleEdit} className="edit-btn">

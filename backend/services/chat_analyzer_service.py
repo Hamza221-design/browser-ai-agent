@@ -1,7 +1,10 @@
+import os
+# Disable ChromaDB telemetry before importing
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 import requests
 import re
 import logging
-import os
 import asyncio
 import math
 import chromadb
@@ -16,8 +19,13 @@ class ChatAnalyzerService:
         self.base_url = "https://api.openai.com/v1/chat/completions"
         self.prompts_dir = os.path.join(os.path.dirname(__file__), '..', 'prompts')
         
-        # Initialize ChromaDB client
-        self.chroma_client = chromadb.PersistentClient(path=os.getenv("CHROMA_DB"))
+        # Initialize ChromaDB client with telemetry disabled
+        self.chroma_client = chromadb.PersistentClient(
+            path=os.getenv("CHROMA_DB"),
+            settings=chromadb.config.Settings(
+                anonymized_telemetry=False
+            )
+        )
 
     def _load_prompt(self, prompt_file: str) -> str:
         """Load prompt template from file."""
@@ -32,7 +40,7 @@ class ChatAnalyzerService:
             logging.error(f"Error loading prompt file {prompt_path}: {str(e)}")
             return ""
 
-    def extract_url_and_requirements(self, user_message: str) -> Tuple[Optional[str], Optional[str], int]:
+    def extract_url_and_requirements(self, user_message: str) -> Tuple[Optional[str], Optional[str]]:
         """Extract URL, test requirements, and number of test cases from user message."""
         logging.info(f"Extracting URL and requirements from message: '{user_message[:100]}...'")
         
@@ -41,7 +49,7 @@ class ChatAnalyzerService:
         
         if not urls:
             logging.warning("No URLs found in user message")
-            return None, None, 5
+            return None, None
             
         url = urls[0]
         logging.info(f"Extracted URL: {url}")
@@ -51,55 +59,18 @@ class ChatAnalyzerService:
         
         if not requirements:
             logging.warning(f"No requirements found after extracting URL from message")
-            return url, None, 5
+            return url, None
         
-        # Extract number of test cases
-        num_test_cases = self._extract_test_case_count(user_message)
-        logging.info(f"Extracted test case count: {num_test_cases}")
         
         logging.info(f"Extracted requirements: '{requirements}'")
-        return url, requirements, num_test_cases
+        return url, requirements
     
     def _extract_test_case_count(self, message: str) -> int:
-        """Extract the number of test cases requested from user message."""
-        message_lower = message.lower()
-        
-        # Look for explicit numbers with test case keywords
-        patterns = [
-            r'(\d+)\s*test\s*cases?',
-            r'generate\s*(\d+)\s*tests?',
-            r'create\s*(\d+)\s*tests?',
-            r'(\d+)\s*tests?',
-            r'about\s*(\d+)\s*test',
-            r'around\s*(\d+)\s*test'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, message_lower)
-            if match:
-                count = int(match.group(1))
-                # Reasonable bounds (1-20)
-                if 1 <= count <= 20:
-                    logging.info(f"Found explicit test case count: {count}")
-                    return count
-                    
-        # Look for qualitative indicators
-        if any(word in message_lower for word in ['few', 'couple', 'some']):
-            logging.info("Found qualitative indicator for few tests: using 3")
-            return 3
-        elif any(word in message_lower for word in ['many', 'lots', 'comprehensive', 'thorough', 'complete']):
-            logging.info("Found qualitative indicator for many tests: using 8")
-            return 8
-        elif any(word in message_lower for word in ['basic', 'simple', 'quick']):
-            logging.info("Found qualitative indicator for basic tests: using 3")
-            return 3
-        elif any(word in message_lower for word in ['detailed', 'extensive', 'full']):
-            logging.info("Found qualitative indicator for detailed tests: using 7")
-            return 7
-            
-        # Default case
-        logging.info("No test case count specified, using default: 5")
-        return 5
+        """Return default number of test cases - count extraction disabled."""
+        # Default to 5 test cases for all requests
+        default_count = 5
+        logging.info(f"Using default test case count: {default_count}")
+        return default_count
     
 
 
@@ -285,11 +256,7 @@ class ChatAnalyzerService:
         logging.info(f"Total chunks created: {total_chunks}")
         return chunks
     
-    def _calculate_test_distribution(self, chunks: List[Dict], total_test_cases: int) -> Dict[int, int]:
-        """Calculate how many test cases to generate for each chunk."""
-        if not chunks:
-            return {}
-            
+   
         # Calculate weights based on element count
         chunk_weights = []
         for chunk in chunks:
@@ -337,119 +304,12 @@ class ChatAnalyzerService:
         logging.info(f"Test distribution calculation: total={total_test_cases}, weights={chunk_weights}, allocated={distribution}")
         return distribution
 
-    def _generate_test_cases_from_chunks(self, chunks: List[Dict], requirements: str, url: str, num_test_cases: int = 5) -> List[Dict]:
-        """Generate test cases from HTML chunks based on requirements."""
-        logging.info(f"Starting test case generation for {len(chunks)} chunks")
-        logging.info(f"Requirements: '{requirements}', URL: {url}, Requested test cases: {num_test_cases}")
-        
-        all_test_cases = []
-        
-        # Calculate test cases per chunk
-        chunk_test_distribution = self._calculate_test_distribution(chunks, num_test_cases)
-        logging.info(f"Test case distribution: {chunk_test_distribution}")
-        
-        for i, chunk in enumerate(chunks):
-            chunk_num = i + 1
-            chunk_test_count = chunk_test_distribution.get(i, 2)  # Default to 2 if not specified
-            
-            logging.info(f"Processing chunk {chunk_num}/{len(chunks)} - Element type: {chunk['element_type']}, Elements: {chunk['element_count']}, Test cases to generate: {chunk_test_count}")
-            
-            # Element type information
-            element_type = chunk['element_type']
-            
-            # Load prompt template
-            prompt_template = self._load_prompt("generate_test_cases_from_chunks.txt")
-            if not prompt_template:
-                logging.error("Failed to load prompt template, using fallback")
-                prompt_template = """
-Based on the user requirements and HTML content, generate {chunk_test_count} comprehensive test cases.
+   
 
-User Requirements: {requirements}
-Target URL: {url}
-Element Type: {element_type}
-HTML Content:
-{html_content}
-
-**Important**
-- Generate exactly {chunk_test_count} test cases
-- Create well defined test cases that are necessary for the user requirements
-- Focus on the most important scenarios for {element_type} elements
-
-Provide JSON response:
-[
-    {{
-        "title": "Descriptive test case title",
-        "description": "Clear description matching user requirements",
-        "expected_behavior": "Expected outcome when test passes",
-        "test_steps": ["Step 1", "Step 2", "Step 3"],
-        "element_type": "{element_type}",
-        "test_type": "functional|validation|negative|positive",
-        "html_code": "HTML code of the test case you generated based on the code and user requirements",
-        "chunk_number": {chunk_number}
-    }}
-]
-"""
-            
-            prompt = prompt_template.format(
-                chunk_test_count=chunk_test_count,
-                requirements=requirements,
-                url=url,
-                element_type=chunk['element_type'],
-                html_content=chunk['html_content'],
-                chunk_number=chunk_num
-            )
-
-            try:
-                logging.debug(f"Sending GPT request for chunk {chunk_num}")
-                headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                }
-                data = {
-                    "model": "gpt-4o-mini",
-                    "messages": [
-                        {"role": "system", "content": "You are an expert QA engineer who generates test cases based on user requirements."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 1500
-                }
-                
-                response = requests.post(self.base_url, headers=headers, json=data, timeout=60)
-                response.raise_for_status()
-                result = response.json()
-                
-                logging.debug(f"Received GPT response for chunk {chunk_num} - Status: {response.status_code}")
-                
-                content = result["choices"][0]["message"]["content"]
-                logging.debug(f"GPT response length for chunk {chunk_num}: {len(content)} characters")
-                
-                # Try multiple JSON extraction strategies
-                test_cases = self._extract_json_from_response(content)
-                
-                if test_cases:
-                    for test_case in test_cases:
-                        test_case["html_chunk"] = chunk['html_content'][:1000] + "..." if len(chunk['html_content']) > 1000 else chunk['html_content']
-                    all_test_cases.extend(test_cases)
-                    logging.info(f"Generated {len(test_cases)} test cases for chunk {i+1}")
-                else:
-                    logging.warning(f"No valid JSON found in response for chunk {i+1}, creating fallback test case")
-                    # Create fallback test case
-                    fallback_case = self._create_fallback_test_case(chunk, requirements, i+1)
-                    all_test_cases.append(fallback_case)
-                    
-            except Exception as e:
-                logging.error(f"Error generating test cases for chunk {i+1}: {str(e)}")
-                # Create fallback test case for any other errors
-                fallback_case = self._create_fallback_test_case(chunk, requirements, i+1)
-                all_test_cases.append(fallback_case)
-                
-        return all_test_cases
-
-    def _generate_test_cases_from_chunks_with_embeddings(self, requirements: str, url: str, num_test_cases: int = 5, relevant_embeddings: List[Dict] = []) -> List[Dict]:
+    def _generate_test_cases_from_chunks_with_embeddings(self, requirements: str, url: str, relevant_embeddings: List[Dict] = []) -> List[Dict]:
         """Generate test cases based on requirements and embedding context."""
         logging.info(f"Starting test case generation with {len(relevant_embeddings)} relevant embeddings")
-        logging.info(f"Requirements: '{requirements}', URL: {url}, Requested test cases: {num_test_cases}")
+        logging.info(f"Requirements: '{requirements}', URL: {url}")
         logging.info(f"Relevant embeddings: {relevant_embeddings}")
         
         all_test_cases = []
@@ -458,37 +318,9 @@ Provide JSON response:
         prompt_template = self._load_prompt("generate_test_cases_with_embeddings.txt")
         if not prompt_template:
             logging.error("Failed to load prompt template, using fallback")
-            prompt_template = """
-Based on the user requirements and historical page context, generate {num_test_cases} comprehensive test cases.
-
-User Requirements: {requirements}
-Target URL: {url}
-Historical Context: {relevant_embeddings}
-
-**Important**
-- Generate exactly {num_test_cases} test cases
-- Create well defined test cases that are necessary for the user requirements
-- Focus on the most important scenarios based on the requirements
-- Use historical context to understand page patterns and functionality
-- Consider different element types (forms, buttons, inputs, links, etc.) based on requirements
-- Generate diverse test types (functional, validation, negative, positive) as appropriate
-
-Provide JSON response:
-[
-    {{
-        "title": "Descriptive test case title",
-        "description": "Clear description matching user requirements",
-        "expected_behavior": "Expected outcome when test passes",
-        "test_steps": ["Step 1", "Step 2", "Step 3"],
-        "element_type": "form|button|input|link|navigation|image|table",
-        "test_type": "functional|validation|negative|positive",
-        "html_code": "HTML code of the test case you generated based on the requirements and context"
-    }}
-]
-"""
+            return all_test_cases   # Return empty list if prompt template is not loaded
         
         prompt = prompt_template.format(
-            num_test_cases=num_test_cases,
             requirements=requirements,
             url=url,
             relevant_embeddings=relevant_embeddings
@@ -987,7 +819,7 @@ Provide JSON response:
         
         return chunks
 
-    def _get_relevant_embeddings(self, domain: str, requirements: str, max_distance: float = 2.5) -> List[Dict]:
+    def _get_relevant_embeddings(self, domain: str, requirements: str, max_distance: float = 2.0) -> List[Dict]:
         """Retrieve relevant embeddings based on requirements."""
         try:
             collection = self.chroma_client.get_collection(name=domain)
@@ -995,7 +827,7 @@ Provide JSON response:
             # First try with requirements as query
             results = collection.query(
                 query_texts=[requirements],
-                n_results=10,
+                n_results=4,
                 where={"domain": domain}
             )
             
@@ -1022,8 +854,9 @@ Provide JSON response:
                             'distance': 3.0  # High distance to indicate it's a fallback
                         })
                     logging.info(f"Using {len(relevant_docs)} fallback embeddings from domain")
+            else:
+                logging.info(f"Found {len(relevant_docs)} relevant embeddings for requirements")
             
-            logging.info(f"Retrieved {len(relevant_docs)} relevant embeddings for requirements")
             return relevant_docs
             
         except Exception as e:
@@ -1036,7 +869,7 @@ Provide JSON response:
         logging.info(f"User message length: {len(user_message)} characters")
         
         # Extract URL, requirements, and test case count
-        url, requirements, num_test_cases = self.extract_url_and_requirements(user_message)
+        url, requirements = self.extract_url_and_requirements(user_message)
         
         if not url:
             logging.error("Chat processing failed: No URL found in message")
@@ -1081,11 +914,11 @@ Provide JSON response:
                 embedding_types = [("Fallback" if emb['distance'] >= 3.0 else "Relevant") for emb in relevant_embeddings]
                 logging.info(f"Found {len(relevant_embeddings)} embeddings for domain {domain}: {embedding_types}")
             
-            # Note: We no longer extract elements or create chunks since test generation is based on requirements and embeddings
+
             
             # Generate test cases with embedding context
             test_cases = self._generate_test_cases_from_chunks_with_embeddings(
-                requirements, url, num_test_cases, relevant_embeddings
+                requirements, url, relevant_embeddings
             )
             
             success_result = {

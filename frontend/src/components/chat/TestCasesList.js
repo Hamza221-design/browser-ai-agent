@@ -12,10 +12,15 @@ const TestCasesList = ({ testCases, onGenerateCode, onGenerateAllCodes, currentU
     setGeneratingIndex(index);
     try {
       const response = await onGenerateCode(testCase);
-      setGeneratedCodes(prev => ({
-        ...prev,
-        [index]: response
-      }));
+      // Clear any existing code for this index and set the new code
+      setGeneratedCodes(prev => {
+        const updatedCodes = { ...prev };
+        // Remove old code for this specific test case
+        delete updatedCodes[index];
+        // Add the new generated code
+        updatedCodes[index] = response;
+        return updatedCodes;
+      });
     } catch (error) {
       console.error('Error generating code:', error);
     } finally {
@@ -363,23 +368,30 @@ const TestCasesList = ({ testCases, onGenerateCode, onGenerateAllCodes, currentU
       </div>
       
       <div className="test-cases-items">
-        {testCases.map((testCase, index) => (
-          <TestCaseItem
-            key={index}
-            testCase={testCase}
-            index={index}
-            generatedCode={generatedCodes[index]}
-            isGenerating={generatingIndex === index}
-            onGenerateCode={handleGenerateCode}
-            executionResult={executionResults[index]}
-            isExecuting={executingIndex === index}
-            onExecuteTest={handleExecuteTest}
-            onEdit={handleEditTestCase}
-            onRemove={handleRemoveTestCase}
-            onAddToContext={onAddToContext}
-            onEditCode={handleEditCode}
-          />
-        ))}
+        {testCases.map((testCase, index) => {
+          const generatedCode = generatedCodes[index];
+          const codeHash = generatedCode?.test_code ? 
+            generatedCode.test_code.length + '_' + generatedCode.test_code.slice(0, 50).replace(/\s/g, '') : 
+            'no-code';
+          
+          return (
+            <TestCaseItem
+              key={`${index}-${codeHash}`}
+              testCase={testCase}
+              index={index}
+              generatedCode={generatedCode}
+              isGenerating={generatingIndex === index}
+              onGenerateCode={handleGenerateCode}
+              executionResult={executionResults[index]}
+              isExecuting={executingIndex === index}
+              onExecuteTest={handleExecuteTest}
+              onEdit={handleEditTestCase}
+              onRemove={handleRemoveTestCase}
+              onAddToContext={onAddToContext}
+              onEditCode={handleEditCode}
+            />
+          );
+        })}
       </div>
     </div>
   );

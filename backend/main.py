@@ -1,3 +1,9 @@
+import os
+# Disable ChromaDB telemetry before any other imports
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_TELEMETRY"] = "False"
+os.environ["CHROMA_ANONYMIZED_TELEMETRY"] = "False"
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.web_analyzer_routes import router as web_analyzer_router
@@ -5,7 +11,6 @@ from routes.test_code_generator_routes import router as test_code_generator_rout
 from routes.chat_analyzer_routes import router as chat_analyzer_router
 from routes.test_executor_routes import router as test_executor_router
 import logging
-import os
 from dotenv import load_dotenv
 
 # Load environment variables
