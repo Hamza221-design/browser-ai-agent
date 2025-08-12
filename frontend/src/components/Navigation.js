@@ -24,6 +24,12 @@ const Navigation = () => {
           >
             AI Chat
           </Link>
+          <Link 
+            to="/unified-chat" 
+            className={`nav-link ${location.pathname === '/unified-chat' ? 'active' : ''}`}
+          >
+            🤖 AI Assistant
+          </Link>
         </div>
       </div>
     </nav>

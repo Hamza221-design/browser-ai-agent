@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import HomePage from './pages/HomePage';
 import AnalyzerPage from './pages/AnalyzerPage';
 import ChatPage from './pages/ChatPage';
+import UnifiedChatPage from './pages/UnifiedChatPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/analyzer" element={<AnalyzerPage />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/unified-chat" element={<UnifiedChatPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
