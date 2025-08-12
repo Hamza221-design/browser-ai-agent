@@ -1,13 +1,27 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from services.unified_chat_service import UnifiedChatService
 import os
 import logging
 import uuid
 
 router = APIRouter()
+
+# Global service instance to maintain session state across requests
+_global_service = None
+
+def get_service():
+    """Get or create the global service instance"""
+    global _global_service
+    if _global_service is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OpenAI API key not configured")
+        _global_service = UnifiedChatService(api_key)
+        logging.info("Created global UnifiedChatService instance")
+    return _global_service
 
 class ChatMessageRequest(BaseModel):
     message: str
@@ -50,19 +64,8 @@ async def list_sessions():
     try:
         logging.info("Listing all active sessions")
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logging.error("OpenAI API key not configured")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "Configuration Error",
-                    "detail": "OpenAI API key not configured",
-                    "status_code": 500
-                }
-            )
-        
-        service = UnifiedChatService(api_key)
+        # Get global service instance
+        service = get_service()
         sessions = service.session_manager.list_sessions()
         
         return SessionsListResponse(
@@ -101,9 +104,10 @@ async def chat(request: ChatMessageRequest):
         
         # Generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
+        logging.info(f"Using session ID: {session_id} (provided: {request.session_id is not None})")
         
-        # Initialize service
-        service = UnifiedChatService(api_key)
+        # Get global service instance (maintains session state across requests)
+        service = get_service()
         
         # Process message
         result = await service.process_message(session_id, request.message)
@@ -131,19 +135,8 @@ async def get_session_info(session_id: str):
     try:
         logging.info(f"Getting session info for: {session_id}")
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logging.error("OpenAI API key not configured")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "Configuration Error",
-                    "detail": "OpenAI API key not configured",
-                    "status_code": 500
-                }
-            )
-        
-        service = UnifiedChatService(api_key)
+        # Get global service instance
+        service = get_service()
         session_info = service.get_session_info(session_id)
         
         return SessionInfoResponse(**session_info)
@@ -164,19 +157,8 @@ async def clear_session(session_id: str):
     try:
         logging.info(f"Clearing session: {session_id}")
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logging.error("OpenAI API key not configured")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "Configuration Error",
-                    "detail": "OpenAI API key not configured",
-                    "status_code": 500
-                }
-            )
-        
-        service = UnifiedChatService(api_key)
+        # Get global service instance
+        service = get_service()
         result = service.clear_session(session_id)
         
         return ClearSessionResponse(**result)
@@ -186,7 +168,7 @@ async def clear_session(session_id: str):
         return JSONResponse(
             status_code=500,
             content={
-                "error": "Session Clear Error",
+                "error": "Clear Session Error",
                 "detail": str(e),
                 "status_code": 500
             }
@@ -197,19 +179,8 @@ async def reset_session(session_id: str):
     try:
         logging.info(f"Resetting session: {session_id}")
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logging.error("OpenAI API key not configured")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "Configuration Error",
-                    "detail": "OpenAI API key not configured",
-                    "status_code": 500
-                }
-            )
-        
-        service = UnifiedChatService(api_key)
+        # Get global service instance
+        service = get_service()
         
         # Clear the session
         result = service.clear_session(session_id)

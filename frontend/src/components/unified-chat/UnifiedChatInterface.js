@@ -2,12 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ActionResults from './ActionResults';
-import { sendChatMessage } from '../../services/unifiedChatService';
+import apiService from '../../services/apiService';
 
 const UnifiedChatInterface = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionState, setSessionState] = useState(null);
+  const [sessionId, setSessionId] = useState(null); // Add session ID state
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -34,12 +35,19 @@ const UnifiedChatInterface = () => {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(message);
+      // Send message with current session ID (if any)
+      const response = await apiService.sendChatMessage(message, sessionId);
       
       // Debug logging
       console.log('API Response:', response);
       console.log('User Response:', response.user_response);
       console.log('Action Results:', response.action_results);
+      console.log('Session ID:', response.session_id);
+      
+      // Update session ID from response (in case it's a new session)
+      if (response.session_id) {
+        setSessionId(response.session_id);
+      }
       
       // Add assistant response to chat
       const assistantMessage = {
@@ -76,6 +84,7 @@ const UnifiedChatInterface = () => {
   const clearChat = () => {
     setMessages([]);
     setSessionState(null);
+    setSessionId(null); // Clear session ID when clearing chat
   };
 
   return (

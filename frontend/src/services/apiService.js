@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// const API_BASE_URL = 'http://192.168.18.21:8000/api/v1';
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://192.168.18.21:8000/api/v1';
+// const API_BASE_URL = 'http://localhost:8000/api/v1';
 
 const apiService = {
   analyzeWebsite: async (url, options = {}) => {
@@ -72,6 +72,66 @@ const apiService = {
     };
     const response = await axios.post(`${API_BASE_URL}/execute-tests`, requestData);
     return response.data;
+  },
+
+  // Unified Chat Service Functions
+  sendChatMessage: async (message, sessionId = null) => {
+    try {
+      const requestData = {
+        message: message
+      };
+      
+      // Include session ID if provided
+      if (sessionId) {
+        requestData.session_id = sessionId;
+      }
+      
+      const response = await axios.post(`${API_BASE_URL}/chat`, requestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      throw error;
+    }
+  },
+
+  getSessionInfo: async (sessionId) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/sessions/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting session info:', error);
+      throw error;
+    }
+  },
+
+  clearSession: async (sessionId) => {
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/sessions/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error clearing session:', error);
+      throw error;
+    }
+  },
+
+  resetSession: async (sessionId) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/reset`);
+      return response.data;
+    } catch (error) {
+      console.error('Error resetting session:', error);
+      throw error;
+    }
+  },
+
+  listSessions: async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/sessions`);
+      return response.data;
+    } catch (error) {
+      console.error('Error listing sessions:', error);
+      throw error;
+    }
   }
 };
 
