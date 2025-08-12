@@ -33,6 +33,12 @@ COPY . .
 # Create logs directory
 RUN mkdir -p /app/logs
 
+# Create db directory with proper permissions
+RUN mkdir -p /app/db && chmod 755 /app/db
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
 # Copy environment file
 COPY config.env /app/config.env
 
@@ -42,6 +48,9 @@ EXPOSE 8000
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+
+# Switch to non-root user
+USER appuser
 
 # Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

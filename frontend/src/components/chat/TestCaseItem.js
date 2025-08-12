@@ -262,6 +262,77 @@ const TestCaseItem = ({ testCase, index, generatedCode, isGenerating, onGenerate
               <pre>{executionResult.error}</pre>
             </div>
           )}
+
+          {/* GPT Analysis Section */}
+          {executionResult.gpt_analysis && (
+            <div className="gpt-analysis-section">
+              <h6>🤖 AI Analysis</h6>
+              
+              {executionResult.gpt_analysis.error ? (
+                <div className="gpt-analysis-error">
+                  <strong>Analysis Error:</strong> {executionResult.gpt_analysis.error}
+                </div>
+              ) : (
+                <>
+                  {executionResult.gpt_analysis.explanation && (
+                    <div className="gpt-explanation">
+                      <strong>Explanation:</strong>
+                      <p>{executionResult.gpt_analysis.explanation}</p>
+                    </div>
+                  )}
+
+                  {executionResult.gpt_analysis.likely_causes && executionResult.gpt_analysis.likely_causes.length > 0 && (
+                    <div className="gpt-causes">
+                      <strong>Likely Causes:</strong>
+                      <ul>
+                        {executionResult.gpt_analysis.likely_causes.map((cause, idx) => (
+                          <li key={idx}>{cause}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {executionResult.gpt_analysis.suggestions && executionResult.gpt_analysis.suggestions.length > 0 && (
+                    <div className="gpt-suggestions">
+                      <strong>Fix Suggestions:</strong>
+                      <ul>
+                        {executionResult.gpt_analysis.suggestions.map((suggestion, idx) => (
+                          <li key={idx}>{suggestion}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {executionResult.gpt_analysis.common_issues && executionResult.gpt_analysis.common_issues.length > 0 && (
+                    <div className="gpt-common-issues">
+                      <strong>Common Issues:</strong>
+                      <ul>
+                        {executionResult.gpt_analysis.common_issues.map((issue, idx) => (
+                          <li key={idx}>{issue}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {executionResult.gpt_analysis.fix_priority && (
+                    <div className="gpt-priority">
+                      <strong>Fix Priority:</strong>
+                      <span className={`priority-${executionResult.gpt_analysis.fix_priority}`}>
+                        {executionResult.gpt_analysis.fix_priority.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+
+                  {executionResult.gpt_analysis.additional_context && (
+                    <div className="gpt-context">
+                      <strong>Additional Context:</strong>
+                      <p>{executionResult.gpt_analysis.additional_context}</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

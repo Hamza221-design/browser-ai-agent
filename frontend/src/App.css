@@ -1538,6 +1538,105 @@ button:disabled {
   margin: 5px 0 0 0;
 }
 
+/* GPT Analysis Styles */
+.gpt-analysis-section {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #e3f2fd;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #f8fbff 0%, #e3f2fd 100%);
+}
+
+.gpt-analysis-section h6 {
+  margin: 0 0 15px 0;
+  color: #1976d2;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gpt-analysis-error {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 4px solid #d32f2f;
+}
+
+.gpt-explanation,
+.gpt-causes,
+.gpt-suggestions,
+.gpt-common-issues,
+.gpt-priority,
+.gpt-context {
+  margin-bottom: 15px;
+}
+
+.gpt-explanation strong,
+.gpt-causes strong,
+.gpt-suggestions strong,
+.gpt-common-issues strong,
+.gpt-priority strong,
+.gpt-context strong {
+  color: #1976d2;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.gpt-explanation p,
+.gpt-context p {
+  margin: 5px 0 0 0;
+  line-height: 1.5;
+  color: #333;
+}
+
+.gpt-causes ul,
+.gpt-suggestions ul,
+.gpt-common-issues ul {
+  margin: 5px 0 0 0;
+  padding-left: 20px;
+}
+
+.gpt-causes li,
+.gpt-suggestions li,
+.gpt-common-issues li {
+  margin-bottom: 5px;
+  line-height: 1.4;
+  color: #333;
+}
+
+.gpt-suggestions li {
+  color: #2e7d32;
+  font-weight: 500;
+}
+
+.gpt-priority span {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.priority-high {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.priority-medium {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.priority-low {
+  background-color: #e8f5e8;
+  color: #388e3c;
+}
+
 .test-cases-header h3 {
   margin: 0;
   color: #333;

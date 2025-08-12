@@ -10,4 +10,5 @@ services:
       - config.env
     volumes:
       - ./logs:/app/logs
+      - ./db:/app/db
     restart: unless-stopped

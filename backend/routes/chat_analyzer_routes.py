@@ -34,7 +34,10 @@ class GenerateCodeResponse(BaseModel):
 @router.post("/chat-analyze", response_model=ChatAnalysisResponse)
 async def chat_analyze(request: ChatMessageRequest):
     try:
+        logging.info(f"=============================================")
+        logging.info(f"======================START OF CHAT ANALYSIS=======================")
         logging.info(f"Processing chat message: {request.message}")
+        logging.info(f"Request: {request}")
         
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
