@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List
 from services.test_executor_service import TestExecutorService
 import logging
+import os
 
 router = APIRouter()
 
@@ -23,6 +24,7 @@ class TestExecutionResult(BaseModel):
     output: str
     error: str
     execution_time: float
+    gpt_analysis: dict = None
 
 class TestExecutionsResponse(BaseModel):
     results: List[TestExecutionResult]
@@ -33,7 +35,9 @@ async def execute_tests(request: TestExecutionsRequest):
     try:
         logging.info(f"Executing {len(request.test_cases)} test cases")
         
-        service = TestExecutorService()
+        # Get OpenAI API key from environment
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        service = TestExecutorService(openai_api_key=openai_api_key)
         
         # Convert request to dict format
         test_cases = []

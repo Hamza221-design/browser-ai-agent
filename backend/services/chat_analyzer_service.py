@@ -649,7 +649,17 @@ class ChatAnalyzerService:
     def _get_domain_from_url(self, url: str) -> str:
         """Extract domain name from URL for collection naming."""
         parsed = urlparse(url)
-        return parsed.netloc.replace('.', '_').replace('-', '_')
+        # Replace all invalid characters for ChromaDB collection names
+        # Only allow alphanumeric characters, underscores, and hyphens
+        domain = parsed.netloc
+        # Replace dots, hyphens, colons, and other special characters with underscores
+        domain = re.sub(r'[^a-zA-Z0-9_-]', '_', domain)
+        # Ensure it doesn't start or end with underscore
+        domain = domain.strip('_')
+        # Ensure it's not empty
+        if not domain:
+            domain = 'default_domain'
+        return domain
 
     def _get_url_path(self, url: str) -> str:
         """Extract URL path for metadata."""

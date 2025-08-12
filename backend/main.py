@@ -10,6 +10,7 @@ from routes.web_analyzer_routes import router as web_analyzer_router
 from routes.test_code_generator_routes import router as test_code_generator_router
 from routes.chat_analyzer_routes import router as chat_analyzer_router
 from routes.test_executor_routes import router as test_executor_router
+from routes.unified_chat_routes import router as unified_chat_router
 import logging
 from dotenv import load_dotenv
 
@@ -51,6 +52,7 @@ app.include_router(web_analyzer_router, prefix="/api/v1")
 app.include_router(test_code_generator_router, prefix="/api/v1")
 app.include_router(chat_analyzer_router, prefix="/api/v1")
 app.include_router(test_executor_router, prefix="/api/v1")
+app.include_router(unified_chat_router, prefix="/api/v1")
 
 if __name__ == "__main__":
     import uvicorn

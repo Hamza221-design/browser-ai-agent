@@ -10,7 +10,7 @@ case "$1" in
         docker build -t $IMAGE_NAME .
         
         # Save hash of requirements.txt for future comparison
-        md5sum requirements.txt | cut -d' ' -f1 > .docker_build_hash
+        md5 requirements.txt | cut -d' ' -f4 > .docker_build_hash
         echo "Build hash saved for requirements.txt"
         ;;
     start)
@@ -20,6 +20,7 @@ case "$1" in
             -p $PORT:8000 \
             --env-file config.env \
             -v $(pwd)/logs:/app/logs \
+            -v $(pwd)/db:/app/db \
             $IMAGE_NAME
         echo "Container started on port $PORT"
         ;;
@@ -55,7 +56,7 @@ case "$1" in
     rebuild)
         echo "Force rebuilding Docker image..."
         docker build -t $IMAGE_NAME .
-        md5sum requirements.txt | cut -d' ' -f1 > .docker_build_hash
+        md5 requirements.txt | cut -d' ' -f4 > .docker_build_hash
         echo "Build hash saved for requirements.txt"
         ;;
     smart-restart)
@@ -65,7 +66,7 @@ case "$1" in
         
         # Check if requirements.txt has changed
         if [ -f ".docker_build_hash" ]; then
-            current_hash=$(md5sum requirements.txt | cut -d' ' -f1)
+            current_hash=$(md5 requirements.txt | cut -d' ' -f4)
             stored_hash=$(cat .docker_build_hash)
             
             if [ "$current_hash" != "$stored_hash" ]; then
@@ -82,7 +83,7 @@ case "$1" in
         ./manage.sh start
         ;;
     *)
-        echo "Usage: $0 {build|start|stop|restart|smart-restart|rebuild|logs|status|shell}"
+        echo "Usage: ./manage.sh {build|start|stop|restart|smart-restart|rebuild|logs|status|shell}"
         echo "  build        - Build Docker image"
         echo "  start        - Start container"
         echo "  stop         - Stop and remove container"

@@ -3,6 +3,8 @@ Generate a Playwright test script in Python for the following test case:
 IMPORTANT: The target URL for this test is: {url}
 Use this exact URL in page.goto() - DO NOT use example.com or any placeholder URLs.
 
+{embeddings_context}
+
 Test Case Details:
 - Title: {title}
 - Description: {description}
@@ -10,9 +12,7 @@ Test Case Details:
 - Element Type: {element_type}
 - Test Steps: {test_steps}
 - Expected Behavior: {expected_behavior}
-
-HTML Content:
-{html_code}
+- Html code {html_code}
 
 Requirements:
 - Use Playwright with Python
