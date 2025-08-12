@@ -2101,11 +2101,12 @@ button:disabled {
   }
   
   .chat-input-container {
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.75rem;
   }
   
   .chat-send-btn {
-    align-self: flex-end;
+   
+    align-self: center;
   }
 }
