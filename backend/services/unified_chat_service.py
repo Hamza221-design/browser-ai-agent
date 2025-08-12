@@ -330,7 +330,11 @@ Consider the conversation history when determining the appropriate response and 
             session.test_cases = test_cases
             session.last_action = "generate_test_cases"
             
-            return {"status": "success", "test_cases_generated": len(test_cases)}
+            return {
+                "status": "success", 
+                "test_cases_generated": len(test_cases),
+                "test_cases": test_cases
+            }
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
@@ -349,7 +353,11 @@ Consider the conversation history when determining the appropriate response and 
             session.generated_code = result
             session.last_action = "generate_test_code"
             
-            return {"status": "success", "code_generated": True}
+            return {
+                "status": "success", 
+                "code_generated": True,
+                "generated_code": result
+            }
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
@@ -373,7 +381,11 @@ Consider the conversation history when determining the appropriate response and 
             session.execution_results = results[0] if results else {}
             session.last_action = "execute_tests"
             
-            return {"status": "success", "execution_completed": True}
+            return {
+                "status": "success", 
+                "execution_completed": True,
+                "execution_results": results
+            }
         except Exception as e:
             return {"status": "error", "error": str(e)}
 

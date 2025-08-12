@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ActionResults from './ActionResults';
-import SessionInfo from './SessionInfo';
 import { sendChatMessage } from '../../services/unifiedChatService';
 
 const UnifiedChatInterface = () => {
@@ -36,6 +35,11 @@ const UnifiedChatInterface = () => {
 
     try {
       const response = await sendChatMessage(message);
+      
+      // Debug logging
+      console.log('API Response:', response);
+      console.log('User Response:', response.user_response);
+      console.log('Action Results:', response.action_results);
       
       // Add assistant response to chat
       const assistantMessage = {
@@ -125,10 +129,6 @@ const UnifiedChatInterface = () => {
 
         <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
       </div>
-
-      {sessionState && (
-        <SessionInfo sessionState={sessionState} />
-      )}
     </div>
   );
 };
