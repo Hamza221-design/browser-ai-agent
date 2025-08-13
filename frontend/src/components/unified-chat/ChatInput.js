@@ -19,7 +19,7 @@ const ChatInput = ({ onSendMessage, isLoading }) => {
   };
 
   return (
-    <div className="chat-input-container">
+    <div className="chat-input-containerr">
       <form onSubmit={handleSubmit} className="chat-input-form">
         <div className="input-wrapper">
           <textarea
