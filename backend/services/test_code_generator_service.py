@@ -2,6 +2,9 @@ import os
 # Disable ChromaDB telemetry before importing
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
+# Disable Hugging Face tokenizers parallelism to avoid forking warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import requests
 import json
 import re
@@ -20,7 +23,9 @@ class TestCodeGeneratorService:
         self.chroma_client = chromadb.PersistentClient(
             path=os.getenv("CHROMA_DB"),
             settings=chromadb.config.Settings(
-                anonymized_telemetry=False
+                anonymized_telemetry=False,
+                allow_reset=True,
+                is_persistent=True
             )
         )
 

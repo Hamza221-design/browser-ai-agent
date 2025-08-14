@@ -30,6 +30,12 @@ const Navigation = () => {
           >
             🤖 AI Assistant
           </Link>
+          <Link 
+            to="/streaming-chat" 
+            className={`nav-link ${location.pathname === '/streaming-chat' ? 'active' : ''}`}
+          >
+            🔄 Streaming
+          </Link>
         </div>
       </div>
     </nav>

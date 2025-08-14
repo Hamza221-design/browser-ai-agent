@@ -1,44 +1,33 @@
 import os
-# Disable ChromaDB telemetry before any other imports
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
+# Disable ChromaDB telemetry before importing
 os.environ["CHROMA_TELEMETRY"] = "False"
 os.environ["CHROMA_ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_SERVER_TELEMETRY"] = "False"
+os.environ["CHROMA_CLIENT_TELEMETRY"] = "False"
+os.environ["POSTHOG_DISABLED"] = "True"
+os.environ["ANALYTICS_DISABLED"] = "True"
+
+# Disable Hugging Face tokenizers parallelism to avoid forking warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Set ChromaDB model caching directory
+chroma_db_path = os.getenv("CHROMA_DB", "db/chromadb")
+os.environ["CHROMA_CACHE_DIR"] = os.path.join(chroma_db_path, "chroma_models")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes.web_analyzer_routes import router as web_analyzer_router
-from routes.test_code_generator_routes import router as test_code_generator_router
-from routes.chat_analyzer_routes import router as chat_analyzer_router
-from routes.test_executor_routes import router as test_executor_router
-from routes.unified_chat_routes import router as unified_chat_router
+from routes import unified_chat_routes, streaming_routes
 import logging
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('config.env')
-
-# Get configuration from environment
-PORT = int(os.getenv('PORT', 8000))
-HOST = os.getenv('HOST', '0.0.0.0')
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-LOG_FILE_PATH = os.getenv('LOG_FILE_PATH', 'logs/app.log')
-
-# Create logs directory if it doesn't exist
-os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE_PATH),
-        logging.StreamHandler()
-    ]
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-app = FastAPI(title="Web Analyzer API", version="1.0.0")
+app = FastAPI(title="Browser AI Agent API", version="1.0.0")
 
-# CORS middleware
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,13 +36,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(web_analyzer_router, prefix="/api/v1")
-app.include_router(test_code_generator_router, prefix="/api/v1")
-app.include_router(chat_analyzer_router, prefix="/api/v1")
-app.include_router(test_executor_router, prefix="/api/v1")
-app.include_router(unified_chat_router, prefix="/api/v1")
+# Include routes
+app.include_router(unified_chat_routes.router, prefix="/api/v1", tags=["chat"])
+app.include_router(streaming_routes.router, tags=["streaming"])
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host=HOST, port=PORT)
+@app.get("/")
+async def root():
+    return {"message": "Browser AI Agent API is running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}

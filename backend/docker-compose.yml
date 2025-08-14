@@ -11,4 +11,5 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./db:/app/db
+      - ./db/chroma_models:/app/db/chroma_models
     restart: unless-stopped

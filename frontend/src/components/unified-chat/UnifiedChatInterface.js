@@ -57,6 +57,7 @@ const UnifiedChatInterface = () => {
         timestamp: new Date(),
         type: 'message',
         actionResults: response.action_results,
+        actions: response.actions,
         sessionState: response.session_state
       };
 
@@ -117,7 +118,7 @@ const UnifiedChatInterface = () => {
             <div key={message.id} className="message-container">
               <ChatMessage message={message} />
               {message.actionResults && message.actionResults.length > 0 && (
-                <ActionResults results={message.actionResults} />
+                <ActionResults results={message.actionResults} actions={message.actions} />
               )}
             </div>
           ))}

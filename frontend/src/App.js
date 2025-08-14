@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage';
 import AnalyzerPage from './pages/AnalyzerPage';
 import ChatPage from './pages/ChatPage';
 import UnifiedChatPage from './pages/UnifiedChatPage';
+import StreamingChatPage from './pages/StreamingChatPage';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/analyzer" element={<AnalyzerPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/unified-chat" element={<UnifiedChatPage />} />
+            <Route path="/streaming-chat" element={<StreamingChatPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -1,35 +1,51 @@
 import React from 'react';
 
 const ChatMessage = ({ message }) => {
-  const formatTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+  const { role, content, timestamp, type } = message;
+
+  const getMessageIcon = () => {
+    switch (type) {
+      case 'status':
+        return '🔄';
+      case 'test_result':
+        return '🧪';
+      case 'analysis':
+        return '🔍';
+      case 'code_update':
+        return '💻';
+      case 'success':
+        return '✅';
+      case 'final_failure':
+        return '❌';
+      case 'error':
+        return '⚠️';
+      default:
+        return role === 'user' ? '👤' : '🤖';
+    }
   };
 
-  const isUser = message.role === 'user';
-  const isError = message.type === 'error';
+  const getMessageClass = () => {
+    const baseClass = 'chat-message';
+    const roleClass = `chat-message-${role}`;
+    const typeClass = type ? `chat-message-${type}` : '';
+    return `${baseClass} ${roleClass} ${typeClass}`.trim();
+  };
 
   return (
-    <div className={`chat-message ${isUser ? 'user-message' : 'assistant-message'} ${isError ? 'error-message' : ''}`}>
-      <div className="message-avatar">
-        {isUser ? '👤' : '🤖'}
-      </div>
-      
-      <div className="message-content">
-        <div className="message-header">
-          <span className="message-role">
-            {isUser ? 'You' : 'AI Assistant'}
-          </span>
+    <div className={getMessageClass()}>
+      <div className="message-header">
+        <span className="message-icon">{getMessageIcon()}</span>
+        <span className="message-role">
+          {role === 'user' ? 'You' : 'AI Assistant'}
+        </span>
+        {timestamp && (
           <span className="message-time">
-            {formatTime(message.timestamp)}
+            {new Date(timestamp).toLocaleTimeString()}
           </span>
-        </div>
-        
-        <div className="message-text">
-          {message.content}
-        </div>
+        )}
+      </div>
+      <div className="message-content">
+        {content}
       </div>
     </div>
   );
